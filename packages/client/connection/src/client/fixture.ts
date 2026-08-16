@@ -3087,6 +3087,12 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
     downloads: {
       sessionLog: () => Promise.resolve(new Response('fixture mode does not serve session export', { status: 404 })),
     },
+    usage: {
+      report: request => ok(request, {
+        timezoneOffsetMinutes: request.payload.timezoneOffsetMinutes ?? 0,
+        days: [],
+      }),
+    },
   }
 
   const rpc: ClientConnectionRpc = {
@@ -3227,6 +3233,7 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'llm.providers': return this.api.llm.providers(request)
       case 'llm.models': return this.api.llm.models(request)
       case 'llm.discoverModels': return this.api.llm.discoverModels(request, signal)
+      case 'usage.report': return this.api.usage.report(request, signal)
     }
   }
 

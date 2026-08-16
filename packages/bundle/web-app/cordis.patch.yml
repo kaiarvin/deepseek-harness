@@ -200,6 +200,11 @@
     - id: ui-settings-general
       name: '@deepseek-ai/dsh-client-ui-settings-general'
 
+    # Sidebar-foot usage entry: the icon beside Settings opening the
+    # cross-session token usage dialog (usage.report).
+    - id: ui-usage-report
+      name: '@deepseek-ai/dsh-client-ui-usage-report'
+
     - id: ui-settings-models
       name: '@deepseek-ai/dsh-client-ui-settings-models'
 
@@ -222,6 +227,12 @@
 
     - id: ui-cordis
       name: '@deepseek-ai/dsh-client-ui-cordis'
+
+    # Expanded color-coded diff cards: takes over the edit/write toolview keys
+    # so file mutations render as default-expanded diffs in the conversation
+    # flow. Remove this row to restore the shipped collapsed file-mutation rows.
+    - id: ui-diff-viewer
+      name: '@deepseek-ai/dsh-client-ui-diff-viewer'
 
     # Durable workflow lifecycle as an independent Chat node after the
     # existing generic workflow tool row.

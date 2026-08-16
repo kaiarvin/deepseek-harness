@@ -278,6 +278,10 @@ export class FakeApiClient implements IApiClient {
     discoverModels: payload => this.record('llm.discoverModels', payload, Promise.resolve(ok({ models: [] }))),
   }
 
+  readonly usage: IApiClient['usage'] = {
+    report: payload => this.record('usage.report', payload, Promise.resolve(ok({ timezoneOffsetMinutes: payload.timezoneOffsetMinutes ?? 0, days: [] }))),
+  }
+
   /** When true, streams never fire onOpen (misbehaving-carrier material for the handshake timeout guard). */
   suppressStreamOpen = false
 

@@ -296,32 +296,46 @@
   padding-left: 0;
 }
 
-/* Footer seats: additive actions stack above Settings. Each occupant owns its
-   button geometry and hover chrome. */
+/* Footer seats: Settings and the additive footer actions share one row in
+   the wide column (20px gap; Settings left, actions right). The collapsed
+   rail stacks them (actions above Settings) because 56px cannot fit two
+   icon buttons side by side. Each occupant owns its button geometry and
+   hover chrome. */
 .footArea {
   flex: none;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: center;
+  gap: 20px;
 }
 
 .settingsArea,
 .footerActions {
   flex: none;
   min-width: 0;
-  width: 100%;
+}
+
+.settingsArea {
+  order: 0;
 }
 
 .footerActions {
   display: flex;
+  order: 1;
 }
 
 .collapsed .footArea {
+  flex-direction: column;
+  gap: 4px;
   align-items: center;
 }
 
-.collapsed .settingsArea,
+.collapsed .settingsArea {
+  order: 1;
+}
+
 .collapsed .footerActions {
-  display: flex;
+  order: 0;
   justify-content: center;
   width: auto;
 }

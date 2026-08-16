@@ -20,6 +20,8 @@ describe('computeHunkDiffs', () => {
       path: 'f.txt',
       oldText: 'line1\nline2\nline3\nline4\nline5\nline6\nline7',
       newText: 'line1\nline2\nline3\nCHANGED\nline5\nline6\nline7',
+      oldStart: 1,
+      newStart: 1,
     }])
   })
 
@@ -31,8 +33,13 @@ describe('computeHunkDiffs', () => {
     expect(diffs[0]?.path).toBe('f.txt')
     expect(diffs[0]?.oldText).toContain('line3')
     expect(diffs[0]?.newText).toContain('A')
+    expect(diffs[0]?.oldStart).toBe(1)
+    expect(diffs[0]?.newStart).toBe(1)
     expect(diffs[1]?.oldText).toContain('line16')
     expect(diffs[1]?.newText).toContain('B')
+    // Each hunk carries the file line of its first context line.
+    expect(diffs[1]?.oldStart).toBe(13)
+    expect(diffs[1]?.newStart).toBe(13)
     // The two hunks are distinct sites, not one merged block.
     expect(diffs[0]?.newText).not.toContain('B')
     expect(diffs[1]?.newText).not.toContain('A')
@@ -44,18 +51,24 @@ describe('computeHunkDiffs', () => {
 
   it('a pure insertion into empty content reports oldText null (nothing to diff against)', () => {
     const diffs = computeHunkDiffs('f.txt', '', 'brand new\n')
-    expect(diffs).toEqual([{ path: 'f.txt', oldText: null, newText: 'brand new' }])
+    expect(diffs).toEqual([{
+      path: 'f.txt', oldText: null, newText: 'brand new', oldStart: 1, newStart: 1,
+    }])
   })
 
   it('a pure deletion of the whole file reports newText empty', () => {
     const diffs = computeHunkDiffs('f.txt', 'gone\n', '')
-    expect(diffs).toEqual([{ path: 'f.txt', oldText: 'gone', newText: '' }])
+    expect(diffs).toEqual([{
+      path: 'f.txt', oldText: 'gone', newText: '', oldStart: 1, newStart: 1,
+    }])
   })
 
   it('drops the "\\ No newline at end of file" marker from a no-trailing-newline change', () => {
     const diffs = computeHunkDiffs('f.txt', 'x', 'y')
     // The marker line (starting with "\\") must never leak into a diff block.
-    expect(diffs).toEqual([{ path: 'f.txt', oldText: 'x', newText: 'y' }])
+    expect(diffs).toEqual([{
+      path: 'f.txt', oldText: 'x', newText: 'y', oldStart: 1, newStart: 1,
+    }])
     expect(diffs[0]?.oldText).not.toContain('\\')
     expect(diffs[0]?.newText).not.toContain('\\')
   })
@@ -69,6 +82,9 @@ describe('computeHunkDiffs', () => {
     expect(diff?.oldText?.split('\n')).toHaveLength(7)
     expect(diff?.newText.split('\n')).toHaveLength(7)
     expect(diff?.oldText?.split('\n')[0]).toBe('line7')
+    // The hunk's first line is line 7 in both files (context is symmetric).
+    expect(diff?.oldStart).toBe(7)
+    expect(diff?.newStart).toBe(7)
   })
 })
 
@@ -86,6 +102,16 @@ describe('diffsFromMeta (defensive narrowing)', () => {
   it('accepts a diff whose oldText is null (a create-style hunk)', () => {
     const meta = { diffs: [{ path: 'f.txt', oldText: null, newText: 'x' }] }
     expect(diffsFromMeta(m(meta))).toEqual(meta.diffs)
+  })
+
+  it('accepts and preserves the optional hunk start lines', () => {
+    const meta = { diffs: [{ path: 'f.txt', oldText: 'a', newText: 'b', oldStart: 12, newStart: 12 }] }
+    expect(diffsFromMeta(m(meta))).toEqual(meta.diffs)
+  })
+
+  it('rejects a diff whose start lines are not numbers', () => {
+    expect(diffsFromMeta(m({ diffs: [{ path: 'f', oldText: 'a', newText: 'b', oldStart: 'x' }] }))).toBeUndefined()
+    expect(diffsFromMeta(m({ diffs: [{ path: 'f', oldText: 'a', newText: 'b', newStart: true }] }))).toBeUndefined()
   })
 
   it('rejects undefined / non-object / array meta', () => {

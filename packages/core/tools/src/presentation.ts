@@ -29,7 +29,10 @@ export interface FileLocation {
  * A single-file change a tool is about to make, for a UI that renders inline
  * diffs. `oldText` is `null` for a new-file create (nothing to diff against);
  * an overwrite also uses `null`, because a call-time presenter has no access to
- * the file's prior content.
+ * the file's prior content. When the change is a computed hunk (the
+ * `edit`/`write` result views), `oldStart`/`newStart` carry the hunk's first
+ * line in the pre- and post-change file, so a UI can render true line numbers;
+ * absent on call-time views and on data produced before these fields existed.
  */
 export interface FileDiff {
   path: string
@@ -37,6 +40,10 @@ export interface FileDiff {
   oldText: string | null
   /** Content after the change. */
   newText: string
+  /** 1-based first line of this hunk in the pre-change file (unset when unknown). */
+  oldStart?: number
+  /** 1-based first line of this hunk in the post-change file (unset when unknown). */
+  newStart?: number
 }
 
 /**
