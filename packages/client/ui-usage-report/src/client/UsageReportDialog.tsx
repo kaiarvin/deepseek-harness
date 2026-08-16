@@ -38,6 +38,22 @@ type LoadState =
 const DONUT_RADIUS = 42
 const DONUT_CIRCUMFERENCE = 2 * Math.PI * DONUT_RADIUS
 
+/** One local day, in ms. */
+const DAY_MS = 86_400_000
+
+/** The report range options: only this many recent days are counted. */
+const RANGE_DAYS = [7, 30] as const
+
+/**
+ * The zero hour of the local day containing `time`, expressed as a UTC epoch
+ * ms for a viewer `timezoneOffsetMinutes` east of UTC (same bucketing rule as
+ * the host's fold, so window boundaries line up with `dayStartMs`).
+ */
+function localDayStartMs(time: number, timezoneOffsetMinutes: number): number {
+  const shifted = time - timezoneOffsetMinutes * 60_000
+  return Math.floor(shifted / DAY_MS) * DAY_MS + timezoneOffsetMinutes * 60_000
+}
+
 /** Fixed model palette; a model beyond the palette cycles back to the first color. */
 const MODEL_COLORS = ['#5b7cf8', '#22b8cf', '#51cf66', '#fcc419', '#ff6b6b', '#cc5de8', '#ff922b', '#20c997'] as const
 
@@ -303,9 +319,15 @@ export function UsageReportDialog({ t, api, onClose }: { t: (key: UsageKey) => s
   )
 }
 
-/** The ready-state body: summary, selected-day model-share donut, and the daily heatmap. */
+/** The ready-state body: range selector, summary, selected-day model-share donut, and the daily heatmap. */
 function ReportBody({ report, t }: { report: UsageReport; t: (key: UsageKey) => string }) {
-  const days = [...report.days].sort((a, b) => a.dayStartMs - b.dayStartMs)
+  // The range the report is cut to: 7 or 30 recent local days. Anything older
+  // than the 30-day option is not counted at all.
+  const [rangeDays, setRangeDays] = useState<typeof RANGE_DAYS[number]>(30)
+  const windowStart = localDayStartMs(Date.now(), report.timezoneOffsetMinutes) - (rangeDays - 1) * DAY_MS
+  const days = [...report.days]
+    .filter(day => day.dayStartMs >= windowStart)
+    .sort((a, b) => a.dayStartMs - b.dayStartMs)
   const dayTotals = new Map(days.map(day => [day, billedTotal(day.tokens)] as const))
   const shares = days.reduce((byModel, day) => {
     for (const model of day.models) {
@@ -325,19 +347,34 @@ function ReportBody({ report, t }: { report: UsageReport; t: (key: UsageKey) => 
   }, new Map<string, UsageModelTotals>())
   const shareList = [...shares.values()].sort((a, b) => billedTotal(b.tokens) - billedTotal(a.tokens))
   const grandTotal = shareList.reduce((sum, model) => sum + billedTotal(model.tokens), 0)
-  const sessionCount = report.days.reduce((sum, day) => sum + day.sessions, 0)
+  const sessionCount = days.reduce((sum, day) => sum + day.sessions, 0)
   // The donut follows the selected calendar day; the default is the most recent day with usage.
   const [selected, setSelected] = useState<number>(() => days.at(-1)?.dayStartMs ?? 0)
-  const selectedDay = days.find(day => day.dayStartMs === selected)
+  // When the range narrows (30 → 7), a selection outside the window falls back
+  // to the window's most recent day instead of leaving the donut empty.
+  const selectedDay = days.find(day => day.dayStartMs === selected) ?? days.at(-1)
   const selectedModels = selectedDay?.models ?? []
 
-  if (report.days.length === 0) return <div className={css.status}>{t('state.empty')}</div>
+  if (days.length === 0) return <div className={css.status}>{t('state.empty')}</div>
 
   return (
     <div className={css.body}>
+      <div className={css.range} role="group" aria-label={t('range.title')}>
+        {RANGE_DAYS.map(daysCount => (
+          <button
+            key={daysCount}
+            type="button"
+            className={clsx(css.rangeOption, daysCount === rangeDays && css.rangeOptionActive)}
+            aria-pressed={daysCount === rangeDays}
+            onClick={() => { setRangeDays(daysCount) }}
+          >
+            {daysCount === 7 ? t('range.seven') : t('range.thirty')}
+          </button>
+        ))}
+      </div>
       <div className={css.summary}>
         <span className={css.summaryItem}>{t('summary.total')} <strong>{formatTokens(grandTotal)}</strong></span>
-        <span className={css.summaryItem}>{t('summary.days')} <strong>{report.days.length}</strong></span>
+        <span className={css.summaryItem}>{t('summary.days')} <strong>{days.length}</strong></span>
         <span className={css.summaryItem}>{t('summary.sessions')} <strong>{sessionCount}</strong></span>
       </div>
       <section className={css.share}>
@@ -353,7 +390,7 @@ function ReportBody({ report, t }: { report: UsageReport; t: (key: UsageKey) => 
         <UsageCalendar
           days={days}
           dayTotals={dayTotals}
-          selected={selected}
+          selected={selectedDay?.dayStartMs ?? 0}
           onSelect={setSelected}
           t={t}
         />

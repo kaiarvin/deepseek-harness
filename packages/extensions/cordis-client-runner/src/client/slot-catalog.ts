@@ -517,7 +517,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     doc: 'The hero-phase Workspace picker hole: rendered by ConversationRoot\nwhile the session is blank (picking another workspace switches to that\nworkspace\'s blank session, draft carried). Root scope: the picker\nreads the global workspace list.',
     registerOptions: [],
     ownerProps: [
-      '/** Owner share common to the hero / New-Session Workspace pickers. */\nexport interface EmptyWorkspaceOwnerProps {\n  open: boolean\n  anchorRef?: RefObject<HTMLElement>\n  /** Currently active workspace (renders a trailing check in the picker list). */\n  selectedId?: WorkspaceId | undefined\n  onPick: (workspaceId: WorkspaceId) => void\n  onClose: () => void\n}',
+      '/** Owner share common to the hero / New-Session Workspace pickers. */\nexport interface EmptyWorkspaceOwnerProps {\n  open: boolean\n  anchorRef?: RefObject<HTMLElement>\n  /** Currently active workspace (renders a trailing check in the picker list). */\n  selectedId?: WorkspaceId | undefined\n  onPick: (workspaceId: WorkspaceId) => void\n  /** Start a standalone session (no Workspace) — the picker\'s escape hatch. */\n  onStandalone: () => void\n  onClose: () => void\n}',
     ],
     ownerPropsReferences: [
       'Workspace',
@@ -1705,6 +1705,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     slotInject: '',
     declaredBy: 'an entry in \'sidebar\' (client-ui-sidebar), so it exists while that entry is mounted',
     occupants: [
+      'client-ui-usage-report UsageReportEntry id \'usage-report\'',
       'client-ui-cordis CordisPanel id \'cordis-panel\'',
     ],
     replaceRisk: 'none',
@@ -1824,6 +1825,8 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     slotInject: '',
     declaredBy: 'an entry in \'conversation.chat.node\' (client-ui-tool), so it exists while that entry is mounted',
     occupants: [
+      'client-ui-diff-viewer DiffViewerRow key \'edit\'',
+      'client-ui-diff-viewer DiffViewerRow key \'write\'',
       'client-ui-skill SkillRow key \'skill\'',
       'client-ui-tool AskQuestionRow key \'ask_user_question\'',
       'client-ui-tool BashRow key \'bash\'',

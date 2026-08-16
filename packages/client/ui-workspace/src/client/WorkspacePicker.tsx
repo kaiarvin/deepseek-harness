@@ -11,7 +11,7 @@
 import type { ReactNode, RefObject } from 'react'
 import { useCallback, useEffect, useState } from 'react'
 import {
-  Button, IconFolderClose16, IconPlusOutline16, Menu, Modal, type MenuEntry,
+  Button, IconFolderClose16, IconNewChatOutline16, IconPlusOutline16, Menu, Modal, type MenuEntry,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {
   WorkspaceId, WorkspaceListState, WorkspaceView,
@@ -21,6 +21,7 @@ import type { DirectoryFlowOwnerProps, WorkspacePickerProps } from './contract/s
 import css from './WorkspacePicker.module.css'
 
 const ADD_WORKSPACE = '::add-workspace'
+const STANDALONE_SESSION = '::standalone-session'
 
 /** Core flow props: the owner supplies popover control and pick semantics. */
 export interface WorkspacePickFlowProps {
@@ -40,6 +41,8 @@ export interface WorkspacePickFlowProps {
   renderDirectoryFlow: (owner: DirectoryFlowOwnerProps) => ReactNode
   /** A real Workspace was picked or created. */
   onPick: (workspaceId: WorkspaceId) => void
+  /** Start a standalone session (no Workspace) instead of picking/adding one. */
+  onStandalone?: (() => void) | undefined
   /** Close the popover (outside click / Escape / post-pick). */
   onClose: () => void
   /** Only offer the add action, hide existing workspaces. */
@@ -64,6 +67,7 @@ export function WorkspacePickFlow({
   useDirectoryFlow,
   renderDirectoryFlow,
   onPick,
+  onStandalone,
   onClose,
   addOnly = false,
   side = 'bottom',
@@ -101,6 +105,14 @@ export function WorkspacePickFlow({
   const addEntries: MenuEntry[] = flowAvailable
     ? [{ id: ADD_WORKSPACE, label: t('menu.addWorkspace'), icon: <IconPlusOutline16 size={16} />, disabled: flowBusy }]
     : []
+  // The standalone option is owner-supplied: the hero owner always offers it
+  // (a session needs no Workspace), while the sidebar's add-only flow leaves
+  // it out — adding a project is that surface's only verb. It rides the same
+  // pinned footer as adding when Workspaces are listed, so the "no project"
+  // escape hatch sits with the add action.
+  const standaloneEntries: MenuEntry[] = onStandalone === undefined
+    ? []
+    : [{ id: STANDALONE_SESSION, label: t('menu.standalone'), icon: <IconNewChatOutline16 size={16} />, disabled: flowBusy }]
   // With workspaces listed, the add action pins below the scroll region
   // (divider + always visible); otherwise it IS the menu.
   const pinAdd = !addOnly && workspaces.length > 0
@@ -111,10 +123,11 @@ export function WorkspacePickFlow({
       icon: <IconFolderClose16 size={16} />,
       disabled: flowBusy,
     }))
-    : addEntries
-  // Nothing listed and nothing to add with (a composition that mounts this
-  // package without any directory-picker): an empty popover would claim a
-  // choice that does not exist, so the anchor gesture shows nothing at all.
+    : [...addEntries, ...standaloneEntries]
+  // Nothing listed and nothing to add or run standalone with (a composition
+  // that mounts this package without any directory-picker and an owner that
+  // offers no standalone action): an empty popover would claim a choice that
+  // does not exist, so the anchor gesture shows nothing at all.
   const menuIsEmpty = items.length === 0
 
   const closeModal = (): void => {
@@ -149,7 +162,10 @@ export function WorkspacePickFlow({
   // loading status instead of jumping into a flow the arriving list would have
   // made unnecessary; the add-only surface lists nothing and never waits.
   const listSettled = addOnly || workspaceSnapshot.phase === 'ready'
-  const addIsTheOnlyEntry = !pinAdd && listSettled && addEntries.length === 1
+  // A one-row menu offers no choice; with the standalone escape hatch also
+  // present (hero surface), the menu IS a real choice and must stay up.
+  const addIsTheOnlyEntry = !pinAdd && listSettled
+    && addEntries.length === 1 && standaloneEntries.length === 0
   // `flowBusy` gates this exactly as it disables the equivalent menu entry: a
   // pick still being adopted owns the surface until it settles.
   useEffect(() => {
@@ -177,6 +193,10 @@ export function WorkspacePickFlow({
       openDirectoryFlow()
       return
     }
+    if (id === STANDALONE_SESSION) {
+      onStandalone?.()
+      return
+    }
     onPick(id as WorkspaceId)
   }
 
@@ -186,7 +206,7 @@ export function WorkspacePickFlow({
         open={open && !addIsTheOnlyEntry && !menuIsEmpty}
         anchor={null}
         items={items}
-        {...pinAdd ? { footer: addEntries } : {}}
+        {...pinAdd ? { footer: [...addEntries, ...standaloneEntries] } : {}}
         selectedId={selectedId}
         onSelect={handleSelect}
         onClose={onClose}
@@ -228,6 +248,7 @@ export function WorkspacePicker({
   useWorkspaces,
   selectedId,
   onPick,
+  onStandalone,
   onClose,
   createWorkspace,
   useDirectoryFlow,
@@ -245,6 +266,7 @@ export function WorkspacePicker({
       renderDirectoryFlow={owner => renderSlot('conversation.hero.workspace.directoryFlow', owner)}
       selectedId={selectedId}
       onPick={onPick}
+      onStandalone={onStandalone}
       onClose={onClose}
     />
   )

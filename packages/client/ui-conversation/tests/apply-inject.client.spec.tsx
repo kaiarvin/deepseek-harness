@@ -312,6 +312,44 @@ describe('conversation slot inject API', () => {
     await b.runtime.dispose()
   })
 
+  it('startStandalone connects a standalone session, carries the draft, and opens it', async () => {
+    const b = await bench()
+    const STANDALONE = 'standalone-1' as SessionId
+    await b.runtime.sessions.add({ id: STANDALONE }, { current: false })
+    const resident = b.residentApi(ROOT)
+    const { state, actions } = b.inputApi(ROOT)
+    actions.setDraft('carry me')
+    b.runtime.workspaces.stub('connectStandalone', () => Promise.resolve(STANDALONE))
+    resident.startStandalone()
+    await vi.waitFor(() => {
+      expect(b.runtime.sessions.calls).toContainEqual({ method: 'open', args: [STANDALONE] })
+    })
+    expect(b.runtime.workspaces.calls).toContainEqual({ method: 'connectStandalone', args: [] })
+    // The draft MOVES to the standalone session, mirroring the Workspace switch.
+    expect(state.getSnapshot().draft).toBe('')
+    expect(b.inputApi(STANDALONE).state.getSnapshot().draft).toBe('carry me')
+
+    // No-session resident (hero before any session): no draft choreography.
+    const noSession = b.residentApi(undefined)
+    b.runtime.workspaces.stub('connectStandalone', () => Promise.resolve(STANDALONE))
+    noSession.startStandalone()
+    await vi.waitFor(() => {
+      expect(b.runtime.sessions.calls.filter(c => c.method === 'open')).toHaveLength(2)
+    })
+
+    // Failure is non-fatal: console diagnostics, no navigation, view survives.
+    const opens = b.runtime.sessions.calls.filter(c => c.method === 'open').length
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    b.runtime.workspaces.stub('connectStandalone', () => Promise.reject(new Error('offline')))
+    noSession.startStandalone()
+    await vi.waitFor(() => {
+      expect(warn).toHaveBeenCalledWith('standalone session failed:', expect.any(Error))
+    })
+    expect(b.runtime.sessions.calls.filter(c => c.method === 'open')).toHaveLength(opens)
+    warn.mockRestore()
+    await b.runtime.dispose()
+  })
+
   it('scopedConversation fails loud when the session resolves no scope', async () => {
     const b = await bench()
     // The chat-view inject resolves the scoped conversation service at inject

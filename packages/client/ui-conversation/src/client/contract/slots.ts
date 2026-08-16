@@ -477,6 +477,12 @@ export interface ConversationInjected {
    */
   selectWorkspace: (workspaceId: WorkspaceId) => Promise<void>
   /**
+   * Start a standalone (no Workspace) session and open it. When a blank
+   * session is already current, carry its draft to the target. Failures are
+   * non-fatal (console diagnostics; the current view stays usable).
+   */
+  startStandalone: () => void
+  /**
    * Framework-bound sources. `composerBlock` is this session's block when a
    * plugin raised one; the reason is the blocker's own localized copy, which
    * the root renders as the inert composer's placeholder.
@@ -817,5 +823,7 @@ export interface EmptyWorkspaceOwnerProps {
   /** Currently active workspace (renders a trailing check in the picker list). */
   selectedId?: WorkspaceId | undefined
   onPick: (workspaceId: WorkspaceId) => void
+  /** Start a standalone session (no Workspace) — the picker's escape hatch. */
+  onStandalone: () => void
   onClose: () => void
 }

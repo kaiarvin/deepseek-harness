@@ -71,6 +71,19 @@ export class TestWorkspaces implements IWorkspaces {
   }
 
   /**
+   * Standalone (no Workspace) New Session (recorded). The default resolves
+   * the fixed 'standalone' session id; stub for cross-session or failure
+   * flows.
+   * @returns the standalone session id.
+   */
+  async connectStandalone(): Promise<SessionId> {
+    this.calls.push({ method: 'connectStandalone', args: [] })
+    const stub = this.stubs.get('connectStandalone')
+    if (stub !== undefined) return await (stub() as Promise<SessionId>)
+    return 'standalone' as SessionId
+  }
+
+  /**
    * Create a Workspace (recorded). The default echoes a view derived from
    * the input; stub for failure or list-coupled flows.
    * @param input - the Host create payload.

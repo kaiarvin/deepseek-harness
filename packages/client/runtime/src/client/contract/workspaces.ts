@@ -21,6 +21,14 @@ export interface IWorkspaces {
    */
   connectWorkspace(workspaceId: WorkspaceId): Promise<SessionId>
   /**
+   * Resolve the session a standalone (no Workspace) New Session lands in:
+   * reuse the first blank session not accounted to any Workspace, else
+   * create a fresh unaccounted one on the host (no workspace or cwd — the
+   * Host starts it at the default project cwd).
+   * @returns the reused or newly created session id.
+   */
+  connectStandalone(): Promise<SessionId>
+  /**
    * The New Session flow: connect the explicit, current-Session, or recent
    * Workspace and open the resulting session; failures surface on the session
    * list state.

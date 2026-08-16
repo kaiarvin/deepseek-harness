@@ -395,7 +395,7 @@ describe('ChatView', () => {
     let firstTop = 100
     let nextTop = 300
     vi.spyOn(scroller, 'getBoundingClientRect').mockImplementation(
-      () => ({ top: 0, bottom: 200 } as DOMRect),
+      () => ({ top: 0, bottom: 200, left: 0 } as DOMRect),
     )
     vi.spyOn(first, 'getBoundingClientRect').mockImplementation(
       () => ({ top: firstTop, bottom: firstTop + 40 } as DOMRect),
@@ -1241,13 +1241,13 @@ describe('ChatView', () => {
     document.body.appendChild(host)
     let anchorTop = 80
     vi.spyOn(host, 'getBoundingClientRect').mockImplementation(
-      () => ({ top: 0, bottom: 500 } as DOMRect),
+      () => ({ top: 0, bottom: 500, left: 0 } as DOMRect),
     )
     const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
       if (this.dataset.chatAnchorKey === 'fixture:user:1') {
-        return { top: anchorTop, bottom: anchorTop + 40 } as DOMRect
+        return { top: anchorTop, bottom: anchorTop + 40, left: 0 } as DOMRect
       }
-      return { top: 0, bottom: 40 } as DOMRect
+      return { top: 0, bottom: 40, left: 0 } as DOMRect
     })
     try {
       const h = makeHarness({ nodes: [user(1, 'q'), assistant(2, 'a')] })
@@ -1283,8 +1283,8 @@ describe('ChatView', () => {
     })
     document.body.appendChild(host)
     const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
-      if (this.dataset.chatAnchorKey === 'fixture:user:1') return { top: 300, bottom: 340 } as DOMRect
-      return { top: 0, bottom: 500 } as DOMRect
+      if (this.dataset.chatAnchorKey === 'fixture:user:1') return { top: 300, bottom: 340, left: 0 } as DOMRect
+      return { top: 0, bottom: 500, left: 0 } as DOMRect
     })
     try {
       const h = makeHarness({ nodes: [user(1, 'q'), assistant(2, 'a')] })
@@ -1328,9 +1328,27 @@ describe('ChatView', () => {
     const h = makeHarness({ nodes: [user(5, 'later')], hasMore: true })
     const view = render(<h.ChatView {...h.props} />)
     fireEvent.click(view.getByText('加载更早'))
-    expect(h.loadOlder).toHaveBeenCalledTimes(1)
+    // One auto-pump page on mount plus the manual click.
+    expect(h.loadOlder).toHaveBeenCalledTimes(2)
     act(() => { h.set({ loadingOlder: true }) })
     expect(view.getByText('加载中…')).toBeTruthy()
+  })
+
+  it('background-pumps older pages until history is exhausted', () => {
+    const h = makeHarness({ nodes: [user(5, 'later')], hasMore: true })
+    const view = render(<h.ChatView {...h.props} />)
+    // Open with history remaining: the view immediately pages older on its own.
+    expect(h.loadOlder).toHaveBeenCalledTimes(1)
+    // In flight: the busy flag re-arms the pump as a no-op (no concurrent page).
+    act(() => { h.set({ loadingOlder: true }) })
+    expect(h.loadOlder).toHaveBeenCalledTimes(1)
+    // Page landed, more remain: the flip re-arms the pump for the next page.
+    act(() => { h.set({ loadingOlder: false, hasMore: true }) })
+    expect(h.loadOlder).toHaveBeenCalledTimes(2)
+    // Final page landed: history exhausted, the pump stops.
+    act(() => { h.set({ loadingOlder: false, hasMore: false }) })
+    expect(h.loadOlder).toHaveBeenCalledTimes(2)
+    expect(view.queryByText('加载更早')).toBeNull()
   })
 
   it('shows open error and loading states', () => {

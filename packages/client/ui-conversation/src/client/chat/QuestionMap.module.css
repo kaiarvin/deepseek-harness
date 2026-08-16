@@ -1,0 +1,81 @@
+/* QuestionMap rail: fixed minimap cluster at the left edge of the transcript
+   scrollport (8px in, inside the composer-side-clearance gutter). The rail
+   accepts wheel input so a cluster that outgrows its fixed 10-bar length stays
+   browsable in place; the scrollbar is hidden so the 14px track stays clean,
+   with the cluster following the active question as the transcript scrolls. */
+
+.rail {
+  position: fixed;
+  z-index: 5;
+  width: 14px;
+  pointer-events: auto;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.rail::-webkit-scrollbar {
+  display: none;
+}
+
+/* One question: a 7px hit area at its slot in the packed cluster (top edge
+   set inline), carrying an 11x3 mark. The button is the whole hit area so
+   small targets stay clickable. Hover lights the hit area up: the mark
+   stretches to the full bar width and brightens, and a pill highlight fills
+   the hit area behind it. */
+.bar {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 7px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  border-radius: 3.5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: background-color 140ms ease;
+}
+
+.barMark {
+  width: 11px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--dsw-alias-label-tertiary);
+  opacity: 0.65;
+  transition:
+    width 140ms ease,
+    background-color 140ms ease,
+    opacity 140ms ease;
+}
+
+.bar:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.bar:hover .barMark {
+  width: 14px;
+  background: var(--dsw-alias-label-primary);
+  opacity: 1;
+}
+
+/* The question currently at the reading edge (the view's anchor position). */
+.barActive .barMark {
+  background: var(--dsw-alias-state-business-primary);
+  opacity: 1;
+}
+
+/* The active mark keeps its business color while still stretching on hover. */
+.barActive:hover .barMark {
+  background: var(--dsw-alias-state-business-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bar,
+  .barMark {
+    transition: none;
+  }
+}
