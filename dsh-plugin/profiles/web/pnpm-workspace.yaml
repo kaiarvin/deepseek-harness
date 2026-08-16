@@ -1,0 +1,11 @@
+packages:
+  - .
+
+nodeLinker: hoisted
+autoInstallPeers: false
+allowBuilds:
+  node-pty: true
+  protobufjs: true
+minimumReleaseAgeExclude:
+  - '@ruihuahe/dsh-plugin-marketplace@0.1.0'
+  - dsh-better-sidebar
