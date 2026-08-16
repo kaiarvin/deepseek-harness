@@ -12,7 +12,8 @@ dsh-plugin/
 │   ├── pnpm-lock.yaml       # 锁定精确版本（可复现安装）
 │   ├── cordis.patch.yml     # 手动挂载行（无 dsh.bundle 的插件）
 │   └── cordis.yml           # profile 根（空列表，模板）
-├── setup.sh             # 一键部署：复制配置到 DSH profile + pnpm install
+├── setup.sh             # 一键部署（bash/macOS/Linux）
+├── setup.bat            # 一键部署（Windows cmd，等价于 setup.sh）
 └── .gitignore           # 忽略 node_modules 等机器相关产物
 ```
 
@@ -44,6 +45,19 @@ bash setup.sh
 # 3. 重启 dsh web（插件 host 半需要重启才生效）
 #    在 dsh 终端 Ctrl+C 后重新 pnpm dsh web，浏览器硬刷新 Cmd+Ctrl+R
 ```
+
+**Windows 用户**：用 `setup.bat`（等价于 setup.sh），在 cmd/PowerShell 中：
+
+```bat
+:: 2. 一键部署插件配置（等价的 Windows 命令）
+setup.bat
+::    或用 DSH_HOME 指定非默认位置：
+::    set DSH_HOME=C:\path\to\dsh && setup.bat
+::    预览不执行：
+::    setup.bat --dry-run
+```
+
+> 注意：`setup.bat` 与 `setup.sh` 等价；脚本内只用 ASCII（无中文），LF / CRLF 行尾均可被 cmd 正确解析，仓库 `.gitattributes` 统一按 LF 管理。
 
 验证是否生效：
 
