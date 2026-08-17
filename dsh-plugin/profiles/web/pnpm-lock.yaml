@@ -18,8 +18,8 @@ importers:
         specifier: ^0.4.2
         version: 0.4.2
       dsh-skill-viewer:
-        specifier: https://github.com/Fishquito7/dsh-skill-viewer/releases/download/v0.6.4/dsh-skill-viewer-0.6.4.tgz
-        version: https://github.com/Fishquito7/dsh-skill-viewer/releases/download/v0.6.4/dsh-skill-viewer-0.6.4.tgz
+        specifier: https://github.com/Fishquito7/dsh-skill-viewer/releases/download/v0.7.0/dsh-skill-viewer-0.7.0.tgz
+        version: https://github.com/Fishquito7/dsh-skill-viewer/releases/download/v0.7.0/dsh-skill-viewer-0.7.0.tgz
 
 packages:
 
@@ -221,10 +221,13 @@ packages:
   dsh-mcp-manager@0.4.2:
     resolution: {integrity: sha512-ODOcEdecMVDCsZu2u1GPxhyxlq9zeO8eyjCrvHe4F8mQ5pBS0hpDBC9R5lC8ZpS4aDMhI6PsX1I3McA49hqRAQ==}
 
-  dsh-skill-viewer@https://github.com/Fishquito7/dsh-skill-viewer/releases/download/v0.6.4/dsh-skill-viewer-0.6.4.tgz:
-    resolution: {integrity: sha512-oS5YZA+WW7oR5+peAV8HW+1WnITTvyfX+TIIIQjrPz0CIhNqnyvJxmW3Cmrpam7mBBvrC/sSDWZRpXY324Dg/g==, tarball: https://github.com/Fishquito7/dsh-skill-viewer/releases/download/v0.6.4/dsh-skill-viewer-0.6.4.tgz}
-    version: 0.6.4
+  dsh-skill-viewer@https://github.com/Fishquito7/dsh-skill-viewer/releases/download/v0.7.0/dsh-skill-viewer-0.7.0.tgz:
+    resolution: {integrity: sha512-JcYK1MrbpstWUbFuChZ5uYMKyQzpB+KyGfJcv7NmsaKTUAQ129z/2PQUgPNllQI8hhhSE/x+iSTG8fIbL1wydQ==, tarball: https://github.com/Fishquito7/dsh-skill-viewer/releases/download/v0.7.0/dsh-skill-viewer-0.7.0.tgz}
+    version: 0.7.0
     hasBin: true
+
+  fflate@0.8.3:
+    resolution: {integrity: sha512-tbZNuJrLwGUp3zshBtdy4W+ORxZuIh8a5ilyIEQDC5rY1f3U20JMry0Ll3WBzU58EZKsEuJFXhb5gwv8CsPvgA==}
 
   node-addon-api@7.1.1:
     resolution: {integrity: sha512-5m3bsyrjFWE1xf7nz7YXdN4udnVtXK6/Yfgn5qnahL6bCkf2yKt4k3nuTKAtT4r3IG8JNR2ncsIMdZuAzJjHQQ==}
@@ -586,15 +589,18 @@ snapshots:
 
   dsh-mcp-manager@0.4.2: {}
 
-  dsh-skill-viewer@https://github.com/Fishquito7/dsh-skill-viewer/releases/download/v0.6.4/dsh-skill-viewer-0.6.4.tgz:
+  dsh-skill-viewer@https://github.com/Fishquito7/dsh-skill-viewer/releases/download/v0.7.0/dsh-skill-viewer-0.7.0.tgz:
     dependencies:
       '@deepseek-ai/dsh-home-paths': 0.0.1-rc.3
       '@deepseek-ai/dsh-typert-protocol': 0.1.0-rc.6
+      fflate: 0.8.3
       yaml: 2.9.0
       zod: 4.4.3
     transitivePeerDependencies:
       - '@deepseek-ai/cordis'
       - '@deepseek-ai/dsh-invariants'
+
+  fflate@0.8.3: {}
 
   node-addon-api@7.1.1: {}
 
