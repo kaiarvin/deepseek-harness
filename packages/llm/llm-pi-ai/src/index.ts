@@ -40,6 +40,9 @@
  *             name: Acme Large
  *             contextWindow: 65536
  *             maxTokens: 4096
+ *           # Undeclared models like acme-large above default to the off /
+ *           # high / max thinking offer; declare reasoningEfforts to rename
+ *           # levels or shape the offer differently.
  *           - id: acme-think
  *             name: Acme Think
  *             contextWindow: 262144

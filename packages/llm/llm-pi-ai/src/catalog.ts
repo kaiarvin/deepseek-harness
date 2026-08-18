@@ -36,6 +36,24 @@ import type {
  */
 const NO_COST: ModelCost = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }
 
+/**
+ * The reasoning offer a hand-declared model (one the installed catalog does
+ * not describe) gets when its profile declares no `reasoningEfforts`: the
+ * same off / high / max levels the shipped DeepSeek catalog models carry, so
+ * every custom model reaches the thinking selector with levels dispatch can
+ * spell. `off` stays absent from the map — supported, send nothing — and the
+ * remaining levels are pinned `null` exactly as a declaration would pin them,
+ * so a model never advertises an effort its wire protocol cannot send.
+ */
+const HAND_DECLARED_DEFAULT_REASONING: ThinkingLevelMap = {
+  minimal: null,
+  low: null,
+  medium: null,
+  high: 'high',
+  xhigh: null,
+  max: 'max',
+}
+
 /** One request modality a pi-ai model may accept. */
 export type PiAiModality = Model<Api>['input'][number]
 
@@ -559,7 +577,9 @@ export interface PiAiModelProfile {
   input?: PiAiModality[]
   /**
    * Selectable reasoning efforts. Absent inherits the installed catalog
-   * entry's capability (a hand-declared model has none and does not reason);
+   * entry's capability — a hand-declared model (one the catalog does not
+   * describe) gets the default off / high / max offer instead of "does not
+   * reason", so a custom model reaches the thinking selector out of the box;
    * `false` declares a non-reasoning model, which is how a profile strips
    * reasoning from a catalog model its gateway cannot serve; a non-empty dict
    * declares the offered levels and their wire spellings.
@@ -630,8 +650,11 @@ interface ModelReasoning {
 /**
  * Resolve one model's reasoning capability from its declared efforts.
  *
- * A declared dict translates to pi-ai's `thinkingLevelMap` with every level
- * decided explicitly: declared levels carry their wire spelling, undeclared
+ * An absent field inherits the installed entry's capability; a hand-declared
+ * model the catalog does not describe gets the default off / high / max offer
+ * instead, so a custom model reasons out of the box. A declared dict
+ * translates to pi-ai's `thinkingLevelMap` with every level decided
+ * explicitly: declared levels carry their wire spelling, undeclared
  * levels are pinned to `null` (unsupported). Pinning matters because pi-ai's
  * own defaulting is asymmetric — an absent key means "supported" for the five
  * base levels but "unsupported" for `xhigh`/`max` — and a profile author
@@ -651,12 +674,21 @@ function resolveModelReasoning(
 ): ModelReasoning {
   const efforts = entry.reasoningEfforts
   if (efforts === undefined) {
-    // Reasoning rides the installed entry or is absent: a bare capability flag
-    // would make pi-ai advertise effort levels with no `thinkingLevelMap` to
-    // spell them, and no listing endpoint reports a model's reasoning
-    // protocol. The entry's map (when any) arrives through the `...base`
-    // spread in the model literal.
-    return { reasoning: base?.reasoning ?? false }
+    if (base !== undefined) {
+      // Reasoning rides the installed entry or is absent: a bare capability flag
+      // would make pi-ai advertise effort levels with no `thinkingLevelMap` to
+      // spell them, and no listing endpoint reports a model's reasoning
+      // protocol. The entry's map (when any) arrives through the `...base`
+      // spread in the model literal. `Model.reasoning` is a required boolean,
+      // so the installed entry always answers.
+      return { reasoning: base.reasoning }
+    }
+    // A hand-declared model defaults to the off / high / max offer instead of
+    // "does not reason": the map spells exactly the levels the selector shows,
+    // and the OpenAI-style `reasoning_effort` dialect most custom gateways
+    // speak dispatches them without a profile. The fresh copy keeps one route's
+    // model from sharing a map object with its siblings.
+    return { reasoning: true, thinkingLevelMap: { ...HAND_DECLARED_DEFAULT_REASONING } }
   }
   // The installed entry's map may ride along through `...base`; pi-ai never
   // reads it on a non-reasoning model, so stripping it is not worth a field

@@ -27,7 +27,7 @@ Two adjacent gaps compounded this. pi-ai decides the reasoning *wire dialect* (`
 
 ## Consequences
 
-- The composer's effort pane works for hand-declared models with zero UI change — `resolveModelInfo` reports declared levels through the same seam catalog metadata uses (pinned by the `declared-reasoning` web scenario).
+- The composer's effort pane works for hand-declared models with zero UI change — `resolveModelInfo` reports declared levels through the same seam catalog metadata uses (pinned by the `declared-reasoning` web scenario). A hand-declared model that declares no `reasoningEfforts` now defaults to the off / high / max offer rather than no reasoning at all ([[2026-08-18-hand-declared-default-thinking-offer]]), so the "does not reason" fallback for it is gone; `false` and a declared dict still shape the offer.
 - #1860's deferred gap — a route-level effort a model cannot take failing its requests — now has an operator remedy: align the model's `reasoningEfforts` or drop the route default.
 - There is deliberately no spelling for returning one map key or compat field to "whatever the catalog said": the declaration is the whole offer, so keeping a catalog value means restating it. The README documents this.
 - `verify-package-invariants` is untouched: the feature adds configuration resolution, no new events or mutable runtime relations.

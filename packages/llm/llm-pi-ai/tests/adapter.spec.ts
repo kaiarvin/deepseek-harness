@@ -495,10 +495,11 @@ describe('provider profile lifecycle', () => {
       ReasoningEffortId('xhigh'),
       ReasoningEffortId('max'),
     ])
-    // A catalog model without reasoning is the same case as a hand-declared
-    // one: pi-ai reports the single level `off`, which translates to omitting
-    // the reasoning option — exactly what naming no effort already does. The
+    // A catalog model without reasoning is reported without a reasoning offer:
+    // pi-ai reports the single level `off`, which translates to omitting the
+    // reasoning option — exactly what naming no effort already does. The
     // capability is reported unavailable rather than offering that control.
+    // (A hand-declared model is different: it defaults to off / high / max.)
     expect((await ctx.llm.resolveModelInfo('openai', 'gpt-4.1')).reasoning).toBeUndefined()
   })
 
@@ -571,6 +572,40 @@ describe('provider profile lifecycle', () => {
         defaultEffort: ReasoningEffortId('high'),
       },
     })
+  })
+
+  it('sends the default off / high / max wire spellings on an undeclared hand-declared model', async () => {
+    vi.stubEnv('PI_TEST_KEY', 'test-key')
+    const server = await mockServer([{ events: textEvents }, { events: textEvents }, { events: textEvents }])
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(LlmPiAi, {
+      providers: {
+        'acme-gateway': {
+          apiKeyEnv: 'PI_TEST_KEY',
+          api: 'openai-completions',
+          baseURL: `${server.url}/v1`,
+          // No reasoningEfforts: the model inherits the default off / high /
+          // max offer, so every level a selector offers really reaches the wire.
+          models: [{ id: 'acme-plain', contextWindow: 65_536, maxTokens: 4096 }],
+        },
+      },
+    })
+    const prompt = (effort: string): Promise<unknown> => assemble(ctx, {
+      provider: 'acme-gateway',
+      model: 'acme-plain',
+      reasoningEffort: ReasoningEffortId(effort),
+      messages: [],
+    })
+
+    await prompt('high')
+    expect(server.requests[0]).toMatchObject({ reasoning_effort: 'high' })
+
+    await prompt('max')
+    expect(server.requests[1]).toMatchObject({ reasoning_effort: 'max' })
+
+    await prompt('off')
+    expect(server.requests[2]).not.toHaveProperty('reasoning_effort')
   })
 
   it('sends the declared wire spelling and refuses undeclared levels before network I/O', async () => {
