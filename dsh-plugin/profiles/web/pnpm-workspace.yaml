@@ -11,4 +11,4 @@ minimumReleaseAgeExclude:
   - dsh-better-sidebar
   # GitHub release tarball, not published to the npm registry, so the
   # supply-chain policy cannot check its release date.
-  - dsh-skill-viewer
+  - dsh-skill-mcp-panel

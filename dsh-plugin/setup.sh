@@ -33,6 +33,8 @@ SRC_DIR="$SCRIPT_DIR/profiles/web"
 DSH_HOME="${DSH_HOME:-${HOME:-${USERPROFILE:-}}/.dsh}"
 PROFILE_DIR="$DSH_HOME/profiles/web"
 FILES=(package.json pnpm-workspace.yaml pnpm-lock.yaml cordis.patch.yml cordis.yml)
+# 本地插件包目录（整目录部署；仓库内不含 node_modules，lib 为预构建产物）
+DIRS=(file-drop-inbox)
 
 say()  { printf '\033[32m[setup]\033[0m %s\n' "$*"; }
 die()  { printf '\033[31m[error]\033[0m %s\n' "$*" >&2; exit 1; }
@@ -42,16 +44,22 @@ die()  { printf '\033[31m[error]\033[0m %s\n' "$*" >&2; exit 1; }
 for f in "${FILES[@]}"; do
   [ -f "$SRC_DIR/$f" ] || die "源配置缺少文件：${SRC_DIR}/${f}"
 done
+for d in "${DIRS[@]}"; do
+  [ -d "$SRC_DIR/$d" ] || die "缺少插件目录：${SRC_DIR}/${d}"
+done
 command -v node >/dev/null 2>&1 || die "未找到 node（需要 node >= 20）"
 command -v pnpm >/dev/null 2>&1 || die "未找到 pnpm（需要 pnpm >= 10）"
 
 say "源配置：${SRC_DIR}"
 say "目标 profile：${PROFILE_DIR}"
-say "将部署 ${#FILES[@]} 个配置文件并运行 pnpm install"
+say "将部署 ${#FILES[@]} 个配置文件和 ${#DIRS[@]} 个插件目录并运行 pnpm install"
 
 if [ "$DRY_RUN" = true ]; then
   say "[dry-run] 步骤 1：mkdir -p ${PROFILE_DIR}"
   say "[dry-run] 步骤 2：复制 ${#FILES[@]} 个配置文件到 ${PROFILE_DIR}（覆盖）"
+  for d in "${DIRS[@]}"; do
+    say "[dry-run] 步骤 2：复制插件目录 ${d}/ 到 ${PROFILE_DIR}/${d}/（覆盖）"
+  done
   say "[dry-run] 步骤 3：cd ${PROFILE_DIR} && pnpm install（重建插件依赖，含 node-pty 构建）"
   say "[dry-run] 完成。下一步：重启 dsh web（pnpm dsh web）并硬刷新浏览器。"
   exit 0
@@ -65,6 +73,11 @@ for f in "${FILES[@]}"; do
   cp "$SRC_DIR/$f" "$PROFILE_DIR/$f"
   say "已部署 ${PROFILE_DIR}/${f}"
 done
+for d in "${DIRS[@]}"; do
+  rm -rf "$PROFILE_DIR/$d"
+  cp -r "$SRC_DIR/$d" "$PROFILE_DIR/$d"
+  say "已部署 ${PROFILE_DIR}/${d}/"
+done
 
 # ── 步骤 3：安装依赖 ─────────────────────────────────────────────────────────
 say "运行 pnpm install（${PROFILE_DIR}）..."
@@ -74,4 +87,4 @@ say "运行 pnpm install（${PROFILE_DIR}）..."
 )
 
 say "完成。下一步：重启 dsh web 并硬刷新浏览器（Cmd/Ctrl+Shift+R）"
-say "若想验证：pnpm dsh --profile web --dump-config | grep -E 'better-sidebar|skills-viewer|mcp-manager'"
+say "若想验证：pnpm dsh --profile web --dump-config | grep -E 'better-sidebar|skill-mcp-panel|file-drop-inbox'"

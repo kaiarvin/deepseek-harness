@@ -49,6 +49,8 @@ if defined DSH_HOME (
 set "PROFILE_DIR=%DSH_ROOT%\profiles\web"
 
 set "FILES=package.json pnpm-workspace.yaml pnpm-lock.yaml cordis.patch.yml cordis.yml"
+rem 本地插件包目录（整目录部署；仓库内不含 node_modules，lib 为预构建产物）
+set "DIRS=file-drop-inbox"
 
 rem ---- preflight checks ----
 if not exist "%SRC_DIR%" (
@@ -59,6 +61,12 @@ if not exist "%SRC_DIR%" (
 for %%f in (%FILES%) do (
   if not exist "%SRC_DIR%\%%f" (
     echo [error] missing source config file: %SRC_DIR%\%%f 1>&2
+    exit /b 1
+  )
+)
+for %%d in (%DIRS%) do (
+  if not exist "%SRC_DIR%\%%d" (
+    echo [error] missing plugin directory: %SRC_DIR%\%%d 1>&2
     exit /b 1
   )
 )
@@ -77,6 +85,7 @@ echo [setup] target profile : %PROFILE_DIR%
 if defined DRY_RUN (
   echo [setup] [dry-run] step 1: mkdir "%PROFILE_DIR%"
   echo [setup] [dry-run] step 2: copy %FILES% to %PROFILE_DIR% ^(overwrite^)
+  for %%d in (%DIRS%) do echo [setup] [dry-run] step 2: copy plugin dir %%d\ to %PROFILE_DIR%\%%d\ ^(overwrite^)
   echo [setup] [dry-run] step 3: cd /d "%PROFILE_DIR%" ^&^& pnpm install ^(rebuild plugin deps, incl. node-pty build^)
   echo [setup] [dry-run] done. next: restart dsh web ^(pnpm dsh web^) and hard-refresh the browser.
   exit /b 0
@@ -89,6 +98,11 @@ rem ---- step 2: copy declaration files (overwrite) ----
 for %%f in (%FILES%) do (
   copy /Y "%SRC_DIR%\%%f" "%PROFILE_DIR%\%%f" >nul
   echo [setup] deployed %PROFILE_DIR%\%%f
+)
+for %%d in (%DIRS%) do (
+  if exist "%PROFILE_DIR%\%%d" rmdir /S /Q "%PROFILE_DIR%\%%d"
+  xcopy /E /I /Q /Y "%SRC_DIR%\%%d" "%PROFILE_DIR%\%%d" >nul
+  echo [setup] deployed %PROFILE_DIR%\%%d\
 )
 
 rem ---- step 3: install dependencies ----
@@ -103,6 +117,6 @@ if not "%PNPM_RC%"=="0" (
 )
 
 echo [setup] done. next: restart dsh web and hard-refresh (Ctrl+Shift+R)
-echo [setup] verify: pnpm dsh --profile web --dump-config ^| findstr "better-sidebar skills-viewer mcp-manager"
+echo [setup] verify: pnpm dsh --profile web --dump-config ^| findstr "better-sidebar skill-mcp-panel file-drop-inbox"
 
 exit /b 0

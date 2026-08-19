@@ -11,7 +11,8 @@ dsh-plugin/
 │   ├── pnpm-workspace.yaml  # allowBuilds / minimumReleaseAgeExclude
 │   ├── pnpm-lock.yaml       # 锁定精确版本（可复现安装）
 │   ├── cordis.patch.yml     # 手动挂载行（无 dsh.bundle 的插件）
-│   └── cordis.yml           # profile 根（空列表，模板）
+│   ├── cordis.yml           # profile 根（空列表，模板）
+│   └── file-drop-inbox/     # 本地插件包：文件拖入工作区 .dsh/inbox（见其 README）
 ├── setup.sh             # 一键部署（bash/macOS/Linux）
 ├── setup.bat            # 一键部署（Windows cmd，等价于 setup.sh）
 └── .gitignore           # 忽略 node_modules 等机器相关产物
@@ -22,9 +23,9 @@ dsh-plugin/
 | 插件 | 用途 | 安装方式 |
 |---|---|---|
 | `dsh-better-sidebar` | 右侧栏工作台（文件/编辑器/终端/Git/浏览器） | npm，bundle 自动挂载 |
-| `dsh-skill-viewer` | Web 界面管理 skills（启停/删除/添加/迁移/分组） | GitHub release tarball，bundle 自动挂载 |
-| `dsh-mcp-manager` | MCP server 管理（设置页） | npm，cordis.patch.yml 手动挂载 |
+| `dsh-skill-mcp-panel` | Web 界面管理 skills 与 MCP（启停/删除/添加/迁移/分组；MCP 面板） | GitHub release tarball，bundle 自动挂载 |
 | `auto-compact` | 自动压缩 | npm，bundle 自动挂载 |
+| `dsh-file-drop-inbox` | 文件拖入工作区 `.dsh/inbox`，草稿插入只显示文件名的 chip，发送为 `[文件名](<路径>)`，气泡中可点击打开文档（log/配置等非图片；图片仍走内置 intake） | 本地包 `profiles/web/file-drop-inbox`，bundle 自动挂载 |
 
 ## 快速开始（新机器）
 
@@ -62,10 +63,10 @@ setup.bat
 验证是否生效：
 
 ```sh
-pnpm dsh --profile web --dump-config | grep -E 'better-sidebar|skills-viewer|mcp-manager'
+pnpm dsh --profile web --dump-config | grep -E 'better-sidebar|skill-mcp-panel|file-drop-inbox'
 ```
 
-浏览器里：设置 → 插件下方应出现「技能」页（skill-viewer），右侧栏出现工作台（better-sidebar）。
+浏览器里：设置 → 插件下方应出现「技能」页和「MCP」页（skill-mcp-panel），右侧栏出现工作台（better-sidebar）。
 
 ## 日常维护
 
@@ -79,4 +80,4 @@ pnpm dsh --profile web --dump-config | grep -E 'better-sidebar|skills-viewer|mcp
 
 - **node_modules 不提交**：它含平台相关二进制（node-pty 等）和指向本机绝对路径的符号链接，clone 到别处会断。由 `pnpm install` 按 lockfile 精确重建。
 - **dsh 本体与本配置分离**：本仓库只管理「插件配置层」（`~/.dsh/profiles/web`）。dsh 本体（deepseek-harness）是另一个仓库，两者都需就位才能运行。
-- 若插件声明 `dsh.bundle.patch`，`dsh plugin add` 会自动追加进 `dsh.profile.bundles`；无 bundle 的插件（如 mcp-manager）需手动加挂载行到 `cordis.patch.yml`。
+- 若插件声明 `dsh.bundle.patch`，`dsh plugin add` 会自动追加进 `dsh.profile.bundles`；无 bundle 的插件需手动加挂载行到 `cordis.patch.yml`。

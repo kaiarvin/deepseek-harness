@@ -4,8 +4,8 @@
   "dependencies": {
     "auto-compact": "^1.2.0",
     "dsh-better-sidebar": "^0.12.1",
-    "dsh-mcp-manager": "^0.4.2",
-    "dsh-skill-viewer": "https://github.com/Fishquito7/dsh-skill-viewer/releases/download/v0.7.0/dsh-skill-viewer-0.7.0.tgz"
+    "dsh-file-drop-inbox": "file:./file-drop-inbox",
+    "dsh-skill-mcp-panel": "https://github.com/Fishquito7/dsh-skill-mcp-panel/releases/download/v2.0.1/dsh-skill-mcp-panel-2.0.1.tgz"
   },
   "dsh": {
     "profile": {
@@ -14,7 +14,8 @@
         "@deepseek-ai/dsh-web-app",
         "auto-compact",
         "dsh-better-sidebar",
-        "dsh-skill-viewer"
+        "dsh-skill-mcp-panel",
+        "dsh-file-drop-inbox"
       ]
     }
   }
