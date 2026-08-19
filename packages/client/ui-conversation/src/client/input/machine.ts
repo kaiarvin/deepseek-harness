@@ -4,8 +4,10 @@
  * clock. Package-private — the SessionInput shell is the only caller and the
  * sole executor of the returned effects.
  *
- * Draft truth: the draft string holds each reference's complete inline display
- * text; the occurrence table carries identity, range, and the owner's cached projections. Every
+ * Draft truth: the draft string holds one U+FFFC placeholder CELL per 4em of
+ * chip width — a chip occupies `length` consecutive placeholder chars, so
+ * both text layers agree on the pill's advance by construction; the
+ * occurrence table carries identity and the owner's cached projections. Every
  * draft mutation is one transaction — draft edit, occurrence reconciliation,
  * and undo-log push are atomic inside dispatch() — and bumps draftRev, which
  * is what lets span CAS reduce to a revision-equality check: equal rev ⟹
@@ -20,19 +22,42 @@ import type {
   InputState, Occurrence, PasteAttemptState, PasteComponent, SubmitAttempt,
 } from './contract.ts'
 
-/** Legacy fixed-width object replacement character rejected from pasted text. */
+/** The object-replacement character backing every chip cell in the draft. */
 export const PLACEHOLDER = '￼'
 
+/** DshChipCell's U+FFFC advance: one 4em blank cell per chip cell (both layers agree by construction). */
+export const CELL_WIDTH_EM = 4
+
+/** Defensive pill-width ceiling: a longer label clips at the cap; the full name rides the title tooltip. */
+export const MAX_CELLS = 24
+
+/** East-Asian-width matcher: CJK/full-width/emoji glyphs occupy a full em (2 narrow units). */
+const WIDE_RE = new RegExp(
+  '[\\u1100-\\u115F\\u2E80-\\u303F\\u3040-\\u30FF\\u31F0-\\u31FF\\u3400-\\u4DBF\\u4E00-\\u9FFF'
+    + '\\uA000-\\uA48F\\uA960-\\uA97F\\uAC00-\\uD7A3\\uF900-\\uFAFF\\uFE10-\\uFE19\\uFE30-\\uFE6F\\uFF00-\\uFF60\\uFFE0-\\uFFE6'
+    + '\\u{1F300}-\\u{1FAFF}\\u{20000}-\\u{2FA1F}]',
+  'u',
+)
+
+/** Legacy marker characters rejected from pasted text (the placeholder plus the old icon glyphs). */
 const REFERENCE_PLACEHOLDER_RE = /[\uE100-\uE11D\uFFFC]/gu
 
 /**
- * Build the inline draft text whose leading marker is decorated as the
- * reference icon in the backdrop.
- * @param reference - reference insertion with its cached display projection.
- * @returns display text with one marker glyph followed by the complete label.
+ * Chip cell-count estimate for a label: narrow chars ≈ 0.5em each, wide
+ * chars ≈ 1em, the label renders at the 0.72 pill scale with 10px of box
+ * slack (scaled at a 14px font), divided by the 4em cell. A layout ESTIMATE
+ * only — the composer measures the real label after paint and grows the run
+ * when this under-shoots (grow-only; an over-estimate leaves a roomier pill).
+ * @param label - the chip's display label.
+ * @returns cell count in [1, MAX_CELLS].
  */
-export function referenceDraftText(reference: Pick<ReferenceInsert, 'label'>): string {
-  return `@${reference.label}`
+export function cellsForLabel(label: string): number {
+  let units = 0
+  for (const ch of label) units += WIDE_RE.test(ch) ? 2 : 1
+  // ceil keeps every nonempty (and even empty) label at ≥ 1 cell: the
+  // numerator floor is 0.514/4 = 0.13.
+  const cells = Math.ceil((units * 0.5 * 0.72 + 10 * 0.72 / 14) / CELL_WIDTH_EM)
+  return Math.min(MAX_CELLS, cells)
 }
 
 /** The machine never writes the queue; the wiring layer overlays the queue store's projection. */
@@ -172,6 +197,7 @@ export class InputMachine {
       case 'draft-changed': return this.onDraftChanged(ev.draft, ev.editRange)
       case 'begin-command': return this.onBeginCommand(ev.claim, ev.span)
       case 'insert-ref': return this.onInsertRef(ev.reference, ev.span)
+      case 'resize-chip': return this.onResizeChip(ev.occurrenceId, ev.cells)
       case 'consume-token': return this.onConsumeToken(ev.guard)
       case 'set-invalid': return this.onSetInvalid(ev.invalidIds)
       case 'undo': return this.onUndo()
@@ -213,9 +239,9 @@ export class InputMachine {
 
   /**
    * Reconcile the occurrence table with one edit (old-draft coordinates):
-   * entries past the range shift by the length delta; an edit that intersects
-   * a reference range removes its structured occurrence and leaves the edited
-   * characters as ordinary draft text.
+   * entries past the range shift by the length delta; entries whose
+   * placeholder RUN intersects the replaced range go away whole (a
+   * deletion/replacement touching any cell acts on the whole chip).
    */
   private reconcile(range: EditRange): void {
     const delta = range.insertedLength - (range.end - range.start)
@@ -236,7 +262,7 @@ export class InputMachine {
   }
 
   /** Mint one occurrence at a draft offset. */
-  private mint(reference: ReferenceInsert, offset: number, length: number): Occurrence {
+  private mint(reference: ReferenceInsert, offset: number, length = 1): Occurrence {
     this.occurrenceSeq += 1
     return {
       occurrenceId: this.occurrenceSeq,
@@ -306,23 +332,51 @@ export class InputMachine {
   }
 
   /**
-   * Shared reference-insertion transaction: replace [span) with one inline
-   * occurrence (insert-ref and paste-upgrade both land here). A separating
-   * space follows the reference unless one is already next.
-   * @returns the inserted length (display text plus optional gap).
+   * Shared chip-insertion transaction: replace [span) with a placeholder run
+   * sized to the label's cell estimate (insert-ref and paste-upgrade both
+   * land here; the composer's post-paint measurement may grow the run later).
+   * A separating space follows the chip unless one is already next.
+   * @returns the inserted length (placeholder run plus optional gap).
    */
   private replaceSpanWithChip(reference: ReferenceInsert, span: TokenSpan): number {
     this.pushTxn()
     this.typingRun = undefined
     const tail = this.draft.slice(span.end)
     const gap = tail.length === 0 || tail[0] !== ' ' ? ' ' : ''
-    const displayText = referenceDraftText(reference)
-    const inserted = displayText + gap
+    const cells = cellsForLabel(reference.label)
+    const inserted = PLACEHOLDER.repeat(cells) + gap
     this.reconcile({ start: span.start, end: span.end, insertedLength: inserted.length })
-    this.withMinted([this.mint(reference, span.start, displayText.length)])
+    this.withMinted([this.mint(reference, span.start, cells)])
     this.adopt(this.draft.slice(0, span.start) + inserted + tail)
     this.watchClaim()
     return inserted.length
+  }
+
+  /**
+   * Grow one chip's placeholder run to `cells` cells (the composer's
+   * post-paint label measurement correcting the insert-time estimate). One
+   * ordinary transaction (undo returns to the estimate). Run integrity needs
+   * no check here: reconcile removes any occurrence whose run an edit touched,
+   * so a live occurrence always still spans its placeholder run.
+   */
+  private onResizeChip(occurrenceId: number, cells: number): InputEffect[] {
+    if (this.phase !== 'plain' && this.phase !== 'claimed') return []
+    if (cells < 1 || cells > MAX_CELLS) return []
+    const index = this.occurrences.findIndex(candidate => candidate.occurrenceId === occurrenceId)
+    const o = index === -1 ? undefined : this.occurrences[index]
+    if (o === undefined) return []
+    if (o.length === cells) return []
+    this.pushTxn()
+    this.typingRun = undefined
+    this.occurrences = [
+      ...this.occurrences.slice(0, index),
+      { ...o, length: cells },
+      ...this.occurrences.slice(index + 1),
+    ]
+    this.adopt(this.draft.slice(0, o.offset) + PLACEHOLDER.repeat(cells) + this.draft.slice(o.offset + o.length))
+    this.watchClaim()
+    this.paste = undefined
+    return []
   }
 
   /**
@@ -421,16 +475,17 @@ export class InputMachine {
     this.pushTxn(selection)
     this.typingRun = undefined
     // Componentize: replace each matched token range (paste-text coordinates,
-    // disjoint by contract) with inline display text while assembling the insert.
+    // disjoint by contract) with a label-sized placeholder run while
+    // assembling the insert.
     const sorted = [...components].sort((a, b) => a.start - b.start)
     const minted: Occurrence[] = []
     let inserted = ''
     let cursor = 0
     for (const c of sorted) {
       inserted += text.slice(cursor, c.start)
-      const displayText = referenceDraftText(c.reference)
-      minted.push(this.mint(c.reference, start + inserted.length, displayText.length))
-      inserted += displayText
+      const cells = cellsForLabel(c.reference.label)
+      minted.push(this.mint(c.reference, start + inserted.length, cells))
+      inserted += PLACEHOLDER.repeat(cells)
       cursor = c.end
     }
     inserted += text.slice(cursor)

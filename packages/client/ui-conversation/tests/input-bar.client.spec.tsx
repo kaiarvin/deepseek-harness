@@ -93,6 +93,8 @@ interface BenchOptions {
   commandMenuOpen?: boolean
   busyEnter?: 'queue' | 'steer'
   toggleCommandMenu?: (selection: { start: number; end: number }) => void
+  /** Host file opener (chip-click route); absent = no clickable chips. */
+  openFile?: (path: string) => void
 }
 
 /** One pending queue row (the runtime snapshot shape, as the dock tests build it). */
@@ -187,6 +189,7 @@ function bench(over?: BenchOptions) {
     useMenuLauncher: bindSnapshotSelector(menuLauncher),
     stop,
     command: over?.command ?? (() => Promise.resolve(true)),
+    openFile: over?.openFile,
     // Mirrors the real lookup chain (conversation namespace, then common).
     t: over?.t ?? makeTranslate(zh, commonZh),
     renderSlot,
@@ -1354,6 +1357,191 @@ describe('decorations', () => {
     fireEvent.cut(textarea, { clipboardData: { setData } })
     expect(setData).toHaveBeenLastCalledWith('text/plain', '@w1')
     expect(shell.snapshot).toMatchObject({ draft: '前  后', occurrences: [] })
+  })
+
+  it('a long label renders a chip spanning multiple 4em cells', () => {
+    const { view, shell } = bench()
+    act(() => {
+      shell.setDraft('参考 @w1 内容')
+      shell.insertReference(
+        {
+          source: 'inbox-file', ref: 'service_list-4.json', label: 'service_list-4.json',
+          clipboardText: '[service_list-4.json](<E:/x>)',
+        },
+        { start: 3, end: 6, draftRev: shell.snapshot.draftRev },
+      )
+    })
+    const chip = view.container.querySelector('[data-decoration="chip"]') as HTMLElement | null
+    expect(chip?.style.width).toBe('8em') // 2 cells × 4em
+    expect(chip?.querySelector('[data-chip-label]')?.textContent).toBe('service_list-4.json')
+    expect(shell.snapshot.draft).toBe('参考 \uFFFC\uFFFC 内容')
+  })
+
+  it('the post-paint measurement grows the pill when the label out-grows its estimate', () => {
+    const original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollWidth')
+    Object.defineProperty(HTMLElement.prototype, 'scrollWidth', {
+      configurable: true,
+      get(this: HTMLElement) {
+        if (this.hasAttribute('data-chip-pill')) return 500 // wider than any estimate
+        return original?.get?.call(this) ?? 0
+      },
+    })
+    try {
+      const { view, shell } = bench()
+      const resizeSpy = vi.spyOn(shell, 'resizeChip')
+      act(() => {
+        shell.setDraft('参考 @w1 内容')
+        shell.insertReference(
+          {
+            source: 'inbox-file', ref: 'r', label: 'service_list-4.json',
+            clipboardText: '[service_list-4.json](<E:/x>)',
+          },
+          { start: 3, end: 6, draftRev: shell.snapshot.draftRev },
+        )
+      })
+      const chip = view.container.querySelector('[data-decoration="chip"]') as HTMLElement | null
+      expect(resizeSpy).toHaveBeenCalled()
+      // Estimate: 2 cells; measured 500px at the 16px jsdom font → 6 cells.
+      expect(chip?.style.width).toBe('24em')
+      expect(shell.snapshot.occurrences[0]?.length).toBe(6)
+      // The correction settles: the settled pill is not resized again.
+      const rev = shell.snapshot.draftRev
+      act(() => {})
+      expect(shell.snapshot.draftRev).toBe(rev)
+      expect(shell.snapshot.occurrences[0]?.length).toBe(6)
+    } finally {
+      if (original !== undefined) Object.defineProperty(HTMLElement.prototype, 'scrollWidth', original)
+    }
+  })
+
+  it('the post-paint measurement shrinks the pill when the estimate overshoots', () => {
+    const original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollWidth')
+    Object.defineProperty(HTMLElement.prototype, 'scrollWidth', {
+      configurable: true,
+      get(this: HTMLElement) {
+        if (this.hasAttribute('data-chip-pill')) return 20 // far narrower than the 2-cell estimate
+        return original?.get?.call(this) ?? 0
+      },
+    })
+    try {
+      const { view, shell } = bench()
+      const resizeSpy = vi.spyOn(shell, 'resizeChip')
+      act(() => {
+        shell.setDraft('参考 @w1 内容')
+        shell.insertReference(
+          {
+            source: 'inbox-file', ref: 'r', label: 'service_list-4.json',
+            clipboardText: '[service_list-4.json](<E:/x>)',
+          },
+          { start: 3, end: 6, draftRev: shell.snapshot.draftRev },
+        )
+      })
+      const chip = view.container.querySelector('[data-decoration="chip"]') as HTMLElement | null
+      expect(resizeSpy).toHaveBeenCalled()
+      // Estimate: 2 cells; measured 20px → ceil(20×0.72/64) = 1 cell.
+      expect(chip?.style.width).toBe('4em')
+      expect(shell.snapshot.occurrences[0]?.length).toBe(1)
+    } finally {
+      if (original !== undefined) Object.defineProperty(HTMLElement.prototype, 'scrollWidth', original)
+    }
+  })
+
+  it('a Windows-path chip is a click target that opens the file with the host opener', () => {
+    const openFile = vi.fn()
+    const { view, shell } = bench({ openFile })
+    act(() => {
+      shell.setDraft('参考 内容')
+      shell.insertReference(
+        {
+          source: 'inbox-file', ref: 'E:/x/service_list-4.json', label: 'service_list-4.json',
+          clipboardText: '[service_list-4.json](<E:/x/service_list-4.json>)',
+        },
+        { start: 3, end: 3, draftRev: shell.snapshot.draftRev },
+      )
+    })
+    const catcher = view.container.querySelector('[data-input-catcher]')
+    expect(catcher).not.toBeNull()
+    const chipButton = view.container.querySelector('[data-input-catcher] button') as HTMLButtonElement | null
+    expect(chipButton?.getAttribute('aria-label')).toBe('service_list-4.json')
+    fireEvent.mouseDown(chipButton!) // the focus-keeping mousedown must not throw
+    fireEvent.click(chipButton!)
+    expect(openFile).toHaveBeenCalledWith('E:/x/service_list-4.json')
+  })
+
+  it('a POSIX-path chip is clickable too', () => {
+    const openFile = vi.fn()
+    const { view, shell } = bench({ openFile })
+    act(() => {
+      shell.setDraft('参考 内容')
+      shell.insertReference(
+        {
+          source: 'inbox-file', ref: '/w/proj/.dsh/inbox/app.log', label: 'app.log',
+          clipboardText: '[app.log](</w/proj/.dsh/inbox/app.log>)',
+        },
+        { start: 3, end: 3, draftRev: shell.snapshot.draftRev },
+      )
+    })
+    const chipButton = view.container.querySelector('[data-input-catcher] button') as HTMLButtonElement | null
+    expect(chipButton).not.toBeNull()
+    fireEvent.click(chipButton!)
+    expect(openFile).toHaveBeenCalledWith('/w/proj/.dsh/inbox/app.log')
+  })
+
+  it('mixed chips: only absolute-path chips render click targets', () => {
+    const openFile = vi.fn()
+    const { view, shell } = bench({ openFile })
+    act(() => {
+      shell.setDraft('参考 内容')
+      shell.insertReference(
+        {
+          source: 'inbox-file', ref: 'E:/x/service_list-4.json', label: 'service_list-4.json',
+          clipboardText: '[service_list-4.json](<E:/x/service_list-4.json>)',
+        },
+        { start: 3, end: 3, draftRev: shell.snapshot.draftRev },
+      )
+    })
+    act(() => {
+      const snap = shell.snapshot
+      shell.insertReference(
+        { source: 'subagent', ref: 'w1', label: '@w1', clipboardText: '@w1' },
+        { start: snap.draft.length, end: snap.draft.length, draftRev: snap.draftRev },
+      )
+    })
+    const catcher = view.container.querySelector('[data-input-catcher]')
+    expect(catcher).not.toBeNull()
+    // The path chip is a button; the non-path chip is a width-only cell.
+    expect(catcher?.querySelectorAll('button')).toHaveLength(1)
+    expect(catcher?.querySelectorAll('[class*="catcherCell"]')).toHaveLength(1)
+    fireEvent.click(catcher!.querySelector('button')!)
+    expect(openFile).toHaveBeenCalledWith('E:/x/service_list-4.json')
+  })
+
+  it('a non-path chip alone renders no click-catcher layer', () => {
+    const openFile = vi.fn()
+    const { view, shell } = bench({ openFile })
+    act(() => {
+      shell.setDraft('参考 @w1 内容')
+      shell.insertReference(
+        { source: 'subagent', ref: 'w1', label: '@w1', clipboardText: '@w1' },
+        { start: 3, end: 6, draftRev: shell.snapshot.draftRev },
+      )
+    })
+    expect(view.container.querySelector('[data-input-catcher]')).toBeNull()
+  })
+
+  it('without a host opener the chip is not a click target', () => {
+    const { view, shell } = bench() // no openFile
+    act(() => {
+      shell.setDraft('参考 内容')
+      shell.insertReference(
+        {
+          source: 'inbox-file', ref: 'E:/x/service_list-4.json', label: 'service_list-4.json',
+          clipboardText: '[service_list-4.json](<E:/x/service_list-4.json>)',
+        },
+        { start: 3, end: 3, draftRev: shell.snapshot.draftRev },
+      )
+    })
+    expect(view.container.querySelector('[data-input-catcher]')).toBeNull()
   })
 
   it('a lexicon-matched plain token renders the text-ref mark', () => {

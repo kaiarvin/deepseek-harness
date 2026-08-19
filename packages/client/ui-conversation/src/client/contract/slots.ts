@@ -571,6 +571,12 @@ export interface ComposerBarInjected {
     gesture: ComposerSubmitGesture,
     steeringAvailable: boolean,
   ) => InputSubmitMode
+  /**
+   * Open a filesystem path with the Host OS's default application (the
+   * composer chip-click route — the same opener the chat view's file links
+   * use); absent with the session.
+   */
+  openFile: ((path: string) => void) | undefined
   /** Toggle the shared slash menu with only its command source; absent without ui-input-trigger or a session. */
   toggleCommandMenu: ((selection: EditSelection) => void) | undefined
   /** Cancel the in-flight turn; absent with the session. */

@@ -289,3 +289,25 @@
 .refIcon {
   flex: none;
 }
+
+/* File link projection inside a user bubble: `[name](<absolute path>)`
+   renders as an openable link with the same link language the markdown sheet
+   gives anchors — link-blue at rest, underline only on hover/focus. */
+.fileLink {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: var(--dsw-alias-state-business-primary);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.fileLink:hover,
+.fileLink:focus {
+  outline: none;
+  text-decoration: underline var(--dsw-alias-state-business-primary);
+  text-underline-offset: 3px;
+}
+}

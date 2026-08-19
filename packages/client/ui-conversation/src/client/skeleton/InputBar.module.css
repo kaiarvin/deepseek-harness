@@ -203,7 +203,8 @@
 
 .input,
 .mirror,
-.backdrop {
+.backdrop,
+.catcher {
   /* Textareas default to content-box (unlike buttons/inputs): without this the
      width:100% textarea gains its padding OUTSIDE the card and text runs past
      the right padding — and wraps 28px later than the mirror/backdrop layers. */
@@ -428,6 +429,26 @@
   position: relative;
 }
 
+/* Reference chip: rendered in the backdrop at the placeholder offset. Hard
+   alignment constraint: the chip's advance must equal the textarea's U+FFFC
+   run advance EXACTLY or every glyph after it drifts (caret/selection follow
+   the textarea character stream). The ::before renders the same U+FFFC through
+   the same font stack (DshChipCell 4em cell), so both layers agree by
+   construction — no measured widths. The chip spans `length` 4em cells (an
+   inline width of length×4em set per chip) — that advance alone matters; the
+   VISIBLE pill is an inner overlay (.chipPill) sized to the label, so a short
+   name never wears a wide empty pill. The pill caps at the cell span (an
+   over-long label ellipsizes; the full name rides the title tooltip). */
+.chip {
+  position: relative;
+  display: inline-block;
+}
+
+.chip::before {
+  content: '\FFFC';
+  color: transparent;
+}
+
 .textRefTriggerGlyph {
   color: transparent;
 }
@@ -439,35 +460,86 @@
   transform: translate(-50%, -50%);
 }
 
-/* Structured references use the same inline-backdrop technique as /skill:
-   their complete display text remains in the textarea, so wrapping and caret
-   geometry come from the browser's native glyph metrics. The leading marker
-   reserves the icon's advance while the backdrop paints the domain glyph. */
-.chip {
-  position: relative;
-  color: var(--dsw-alias-state-business-primary);
-  background: transparent;
-  -webkit-box-decoration-break: clone;
-  box-decoration-break: clone;
-}
-
-.chipTrigger {
-  position: relative;
-}
-
-.chipTriggerGlyph {
-  color: transparent;
-}
-
-.chipIcon {
+/* The visible tag: hugs the label (max-content width + padding), scaled 0.72
+   like the old overlay, never wider than the chip's cell advance
+   (max-width 100%/0.72 compensates the scale). Vertical centering via the
+   translate — the pill is laid out at 1/0.72 of its visual size. */
+.chipPill {
   position: absolute;
-  top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%);
+  top: 50%;
+  display: flex;
+  align-items: center;
+  max-width: calc(100% / 0.72);
+  padding: 0 8px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: rgba(97, 135, 216, 0.22);
+  white-space: nowrap;
+  transform: translate(-50%, -50%) scale(0.72);
+}
+
+.chipLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-primary);
+}
+
+.chipInvalid .chipPill {
+  background: rgba(216, 97, 97, 0.2);
+}
+
+.chipInvalid .chipLabel {
+  text-decoration: line-through;
 }
 
 .chipInvalid {
-  text-decoration: line-through;
   opacity: 0.7;
   color: var(--dsw-alias-state-error-primary);
+}
+
+/* Click-catcher layer: an invisible replica of the backdrop flow that rides
+   ABOVE the textarea (so its pills can intercept clicks the caret layer would
+   otherwise take). Same metrics as the other two text layers — the shared
+   .input/.mirror/.backdrop/.catcher rule below — so the catcher pills land
+   exactly on their visual pills. Everything but the pills is transparent and
+   pointer-inert; each absolute-path chip becomes a real button that opens the
+   file with the Host opener (same as the chat view's file links). */
+.catcher {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  color: transparent;
+  pointer-events: none;
+}
+
+.catcherChip {
+  display: inline-block;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: transparent;
+  font: inherit;
+  line-height: inherit;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+/* Non-path chips keep the catcher flow aligned with a width-only cell (no
+   button: clicks on them fall through to the textarea's caret placement). */
+.catcherCell {
+  display: inline-block;
+}
+
+.catcherChip:disabled {
+  cursor: default;
+}
+
+.catcherChip:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
 }

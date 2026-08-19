@@ -114,6 +114,13 @@ export interface ComposerKeyboard {
   redo(): void
   /** Paste over the selection (sync components ride the same transaction). */
   pasteBegin(text: string, selection: EditSelection, components?: readonly PasteComponent[], generation?: number): void
+  /**
+   * Grow one chip's placeholder run to `cells` cells (the composer's
+   * post-paint label measurement correcting the insert-time estimate).
+   * Machine-guarded: no-ops when the chip is gone, the run is not intact, or
+   * the phase does not accept reference mutations.
+   */
+  resizeChip(occurrenceId: number, cells: number): void
   /** Caret/selection gestures the machine cannot observe end the paste attempt. */
   invalidatePaste(): void
   /** Feed a draft/caret change through trigger detection (guard derived from phase). */
@@ -149,9 +156,9 @@ export interface EditRange extends EditSelection {
 }
 
 /**
- * One reference occurrence backed by its complete inline display text in the
- * draft. Identity is occurrenceId — same-named
- * references stay independently addressable. label/appearance/clipboardText are the
+ * One reference chip occurrence, backing a run of U+FFFC placeholder cells
+ * in the draft. Identity is occurrenceId — same-named
+ * references stay independently addressable. label/clipboardText are the
  * owner's insert-time projections, cached so the chip survives owner loss
  * (invalid flips instead of dropping the occurrence).
  */
@@ -162,11 +169,11 @@ export interface Occurrence {
   readonly source: string
   /** Owner-scoped reference id. */
   readonly ref: string
-  /** Display-text offset in the draft. */
+  /** Placeholder offset in the draft; the occurrence occupies [offset, offset+length). */
   readonly offset: number
-  /** Display-text length; the occurrence occupies exactly [offset, offset+length). */
+  /** Chip cell count: one 4em blank cell per placeholder char (the pill width in cells). */
   readonly length: number
-  /** Inline display label (insert-time cache). */
+  /** Chip display label (insert-time cache). */
   readonly label: string
   /** Optional domain glyph (insert-time cache). */
   readonly appearance?: ReferenceInsert['appearance']
@@ -219,7 +226,7 @@ export interface InputState {
   readonly phase: 'plain' | 'adjudicating' | 'claimed' | 'submitting'
   /** Present exactly while claimed/submitting (claim snapshot during flight; submit closure withheld). */
   readonly claim?: { readonly token: string; readonly hint?: string; readonly images?: boolean }
-  /** Reference occurrence table, sorted by offset. */
+  /** Chip occurrence table, sorted by offset (one placeholder run per entry). */
   readonly occurrences: readonly Occurrence[]
   /** Live paste-match attempt (absent when no paste is matchable). */
   readonly paste?: PasteAttemptState
@@ -252,8 +259,10 @@ export type InputEvent =
   /** Full next draft from the textarea; editRange narrows the occurrence math (absent → diff scan). */
   | { readonly type: 'draft-changed'; readonly draft: string; readonly editRange?: EditRange }
   | { readonly type: 'begin-command'; readonly claim: CommandClaim; readonly span: TokenSpan }
-  /** Place one inline reference at the span and mint the occurrence (scoped insert-reference event payload). */
+  /** Place one U+FFFC run at the span and mint the occurrence (scoped insert-reference event payload). */
   | { readonly type: 'insert-ref'; readonly reference: ReferenceInsert; readonly span: TokenSpan }
+  /** Grow one chip's placeholder run (post-paint label measurement; one undo unit). */
+  | { readonly type: 'resize-chip'; readonly occurrenceId: number; readonly cells: number }
   /** Delete a settled command token; success is observable as a draftRev advance. */
   | { readonly type: 'consume-token'; readonly guard: ConsumeTokenGuard }
   /** Owner-resolution result: exactly the listed occurrences are invalid (style bit; not a transaction). */

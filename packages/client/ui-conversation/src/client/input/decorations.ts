@@ -12,19 +12,17 @@ export interface TokenRange {
   readonly end: number
 }
 
-/** One structured inline-reference render instruction. */
+/** One chip render instruction: the placeholder run at `offset` draws as `label`. */
 export interface ChipRender {
   /** Stable render key (same-labeled chips stay independent). */
   readonly occurrenceId: number
-  /** Display-text offset in the draft. */
+  /** Placeholder offset in the draft (the chip occupies [offset, offset+length)). */
   readonly offset: number
-  /** Display-text length in the draft. */
+  /** Placeholder-run length (the pill width in 4em cells). */
   readonly length: number
-  /** Exact inline text whose native glyph metrics determine layout. */
-  readonly text: string
   readonly label: string
-  /** Optional domain glyph beside the label. */
-  readonly appearance?: 'session' | 'file' | 'folder'
+  /** Owner reference (an absolute path marks the chip clickable — the composer's file open). */
+  readonly ref: string
   /** Owner-resolution failure styling bit. */
   readonly invalid: boolean
 }
@@ -119,9 +117,8 @@ export function deriveDecorations(
     occurrenceId: o.occurrenceId,
     offset: o.offset,
     length: o.length,
-    text: draft.slice(o.offset, o.offset + o.length),
     label: o.label,
-    ...o.appearance === undefined ? {} : { appearance: o.appearance },
+    ref: o.ref,
     invalid: o.invalid === true,
   }))
   const hint = claimActive && claim.hint !== undefined && draft.slice(claim.token.length).trim() === ''

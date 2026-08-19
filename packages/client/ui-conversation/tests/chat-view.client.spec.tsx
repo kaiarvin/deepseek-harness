@@ -374,6 +374,29 @@ describe('Chat node rendering', () => {
     expect(formatRunDuration(125_000, t)).toBe('2分05秒')
   })
 
+  it('renders an absolute-path markdown link in a user bubble as an openable file link', () => {
+    const dropped = '[app.log](</w/proj/.dsh/inbox/app.log>)'
+    const h = makeHarness({ nodes: [user(1, dropped)] })
+    const view = render(<h.ChatView {...h.props} />)
+    const link = view.getByRole('button', { name: 'app.log' })
+    expect(link.getAttribute('title')).toBe('/w/proj/.dsh/inbox/app.log')
+    fireEvent.click(link)
+    // The same Host opener the tool rows use; the link target passes through.
+    expect(h.openFile).toHaveBeenCalledWith('/w/proj/.dsh/inbox/app.log')
+  })
+
+  it('keeps non-absolute links and plain ref chips literal in a user bubble', () => {
+    const h = makeHarness({
+      nodes: [user(1, '[rel](<site/a.log>) and /skillname together')],
+    })
+    const view = render(<h.ChatView {...h.props} />)
+    // The relative-target link is not a file link: no file-link button, text stays literal.
+    expect(view.container.querySelector('[class*="fileLink"]')).toBeNull()
+    expect(view.getByText(/\[rel\]\(<site\/a\.log>\)/)).toBeTruthy()
+    // The /skillname chip still decorates as before.
+    expect(view.container.querySelector('[data-ref-chip="skill"]')?.textContent).toBe('/skillname')
+  })
+
 })
 
 describe('ChatView', () => {

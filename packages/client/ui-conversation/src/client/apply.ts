@@ -321,6 +321,7 @@ export function apply(ctx: Context): void {
           toggleCommandMenu: undefined,
           stop: undefined,
           command: undefined,
+          openFile: undefined,
           hooks: { notices: ABSENT_NOTICES, lexicon: ABSENT_LEXICON, menuLauncher: ABSENT_MENU_LAUNCHER },
         }
       }
@@ -375,6 +376,13 @@ export function apply(ctx: Context): void {
           if (session === undefined) return false
           const result = await session.command(line)
           return result.ok && result.value.matched
+        },
+        openFile: (path) => {
+          const cwd = sessions.list.getSnapshot().byId[sessionId]?.cwd
+          void workspaces.openPath(resolveWorkspacePath(cwd, path)).catch(() => {
+            // Host/OS open failures stay silent in the draft chip; the native
+            // app surfaces its own error dialog when the path is unusable.
+          })
         },
         hooks: {
           notices: shell.notices,
