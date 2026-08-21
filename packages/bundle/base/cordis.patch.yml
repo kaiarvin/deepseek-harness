@@ -281,8 +281,8 @@
     - id: token-meter
       name: '@deepseek-ai/dsh-token-meter'
 
-    # Cross-session usage report: folds the logical corpus per local day and
-    # model for the Web usage dialog (usage.report). Optional — without it the
+    # Cross-session usage report: incremental per-day, per-model token ledger
+    # for the Web usage dialog (usage.report). Optional — without it the
     # dialog answers usage-unavailable.
     - id: session-usage-report
       name: '@deepseek-ai/dsh-session-usage-report'

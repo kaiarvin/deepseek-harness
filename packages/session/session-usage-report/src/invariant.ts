@@ -15,11 +15,13 @@ export const name = 'session-usage-report-invariant'
 export const inject = ['invariants']
 
 /**
- * No runtime invariant: the package owns a stateless corpus fold whose
+ * No runtime invariant: the package owns an incremental usage ledger whose
  * event relations (attribution to the latest preceding `request/header`,
  * usage riding `assistant/message`) are owned by the session surface and
- * dsh-agent-loop, and whose wire payload is zod-validated by the apiproxy
- * `usage` domain at every call.
+ * dsh-agent-loop; the durable sample file is validated on load (fail-soft to
+ * a one-time backfill), and the wire payload is zod-validated by the
+ * apiproxy `usage` domain at every call. The backfill/live reconciliation by
+ * seq is asserted by the package's own tests.
  */
 const install: InvariantInstaller = () => {}
 

@@ -6,7 +6,7 @@ Status: implemented
 
 ## Problem
 
-手工声明的 pi-ai 模型——即已安装 catalog 未描述、也就是通过 Web「模型」页「添加自定义提供方」卡片加入的每一个模型——除非其条目声明了 `reasoningEfforts`，否则都会被物化为 `reasoning: false`（[按模型推理声明](../feature/2026-08-08-pi-ai-per-model-reasoning-declarations.md)）。作曲器的思考档位选择器只渲染当前模型推理元数据实际提供的档位，因此自定义模型完全不显示思考控件，而 shipped 的 DeepSeek catalog 模型则提供 关闭 / 高 / 最高。部署以自定义网关为主的用户没有任何办法为它们挑选思考强度，而且修复并不可发现：需要手改 `settings.yaml`，给每个模型补一个 `reasoningEfforts` 块——该字段没有任何配置界面可编辑。
+手工声明的 pi-ai 模型——即已安装 catalog 未描述、也就是通过 Web「模型」页「添加自定义提供方」卡片加入的每一个模型——除非其条目声明了 `reasoningEfforts`，否则都会被物化为 `reasoning: false`（[按模型推理声明](../feature/2026-08-08-pi-ai-per-model-reasoning-declarations.zh.md)）。作曲器的思考档位选择器只渲染当前模型推理元数据实际提供的档位，因此自定义模型完全不显示思考控件，而 shipped 的 DeepSeek catalog 模型则提供 关闭 / 高 / 最高。部署以自定义网关为主的用户没有任何办法为它们挑选思考强度，而且修复并不可发现：需要手改 `settings.yaml`，给每个模型补一个 `reasoningEfforts` 块——该字段没有任何配置界面可编辑。
 
 ## Decision
 
@@ -28,4 +28,4 @@ catalog 模型不受影响：条目点名 catalog id 而未声明 `reasoningEffo
 - 每个手工声明模型——现有的与将来的——都在作曲器提供 关闭 / 高 / 最高，且每个档位都真正到达 wire。自定义网关用户获得与 shipped DeepSeek 模型相同的思考控件。
 - `reasoningEfforts: false` 仍是「网关吃不下该参数的模型」的拼写，声明的 dict 仍按模型塑形档位。
 - 拒绝 `reasoning_effort` 参数的自定义端点会在请求处响亮失败（提供方报错），而不是被隐藏；profile 的 `compat.supportsReasoningEffort: false` 仍是这类端点的运维逃生口，配置了路由级 `reasoning` 默认的部署仍以它优先。
-- 选择器的固定三档是 DeepSeek 词汇（[思考档位选择](../feature/2026-08-16-thinking-level-select.md)）；自带不同原生档位词汇的手工声明模型仍通过声明 `reasoningEfforts` 改名 wire 拼写。
+- 选择器的固定三档是 DeepSeek 词汇（[思考档位选择](../feature/2026-08-16-thinking-level-select.zh.md)）；自带不同原生档位词汇的手工声明模型仍通过声明 `reasoningEfforts` 改名 wire 拼写。

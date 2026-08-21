@@ -1128,7 +1128,9 @@ export interface PiAiModelProfile {
   input?: PiAiModality[]
   /**
    * Selectable reasoning efforts. Absent inherits the installed catalog
-   * entry's capability (a hand-declared model has none and does not reason);
+   * entry's capability — a hand-declared model (one the catalog does not
+   * describe) gets the default off / high / max offer instead of "does not
+   * reason", so a custom model reaches the thinking selector out of the box;
    * `false` declares a non-reasoning model, which is how a profile strips
    * reasoning from a catalog model its gateway cannot serve; a non-empty dict
    * declares the offered levels and their wire spellings.
@@ -1958,6 +1960,24 @@ export type Config = SessionTitleLlmConfig
 依赖：[`SessionTitleLlmConfig`](../packages/session/session-title-llm/src/index.ts)
 
 来源：[`packages/session/session-title-first-prompt-llm/src/index.ts:15`](../packages/session/session-title-first-prompt-llm/src/index.ts)
+
+<a id="deepseek-aidsh-session-usage-report"></a>
+
+## `@deepseek-ai/dsh-session-usage-report`
+
+```ts config-catalog
+/** Construction options (the Cordis plugin config face). */
+export interface SessionUsageReportConfig {
+  /** Directory for the sample file; defaults to `dshHomePath('usage-report')`. */
+  cacheDir?: string
+  /** Prune samples older than this many days on load and write; default {@link DEFAULT_RETENTION_DAYS}. */
+  retentionDays?: number
+  /** Debounce before persisting newly appended samples; default {@link DEFAULT_PERSIST_DELAY_MS}. */
+  persistDelayMs?: number
+}
+```
+
+来源：[`packages/session/session-usage-report/src/index.ts:130`](../packages/session/session-usage-report/src/index.ts)
 
 <a id="deepseek-aidsh-settings-file"></a>
 
@@ -3238,6 +3258,7 @@ export interface Config {
 - `@deepseek-ai/dsh-client-ui-conversation`（[`packages/client/ui-conversation/src/index.ts`](../packages/client/ui-conversation/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-cordis`（[`packages/extensions/ui-cordis/src/index.ts`](../packages/extensions/ui-cordis/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-deliverables` — 需要 `systemPrompt`（[`packages/client/ui-deliverables/src/index.ts`](../packages/client/ui-deliverables/src/index.ts)）
+- `@deepseek-ai/dsh-client-ui-diff-viewer`（[`packages/client/ui-diff-viewer/src/index.ts`](../packages/client/ui-diff-viewer/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-directory-picker-browse`（[`packages/client/ui-directory-picker-browse/src/index.ts`](../packages/client/ui-directory-picker-browse/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-directory-picker-native`（[`packages/client/ui-directory-picker-native/src/index.ts`](../packages/client/ui-directory-picker-native/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-goal`（[`packages/client/ui-goal/src/index.ts`](../packages/client/ui-goal/src/index.ts)）
@@ -3261,6 +3282,7 @@ export interface Config {
 - `@deepseek-ai/dsh-client-ui-theme`（[`packages/client/ui-theme/src/index.ts`](../packages/client/ui-theme/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-tool`（[`packages/client/ui-tool/src/index.ts`](../packages/client/ui-tool/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-trajectory`（[`packages/client/ui-trajectory/src/index.ts`](../packages/client/ui-trajectory/src/index.ts)）
+- `@deepseek-ai/dsh-client-ui-usage-report`（[`packages/client/ui-usage-report/src/index.ts`](../packages/client/ui-usage-report/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-user-questions`（[`packages/client/ui-user-questions/src/index.ts`](../packages/client/ui-user-questions/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-workflow-run`（[`packages/client/ui-workflow-run/src/index.ts`](../packages/client/ui-workflow-run/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-workspace`（[`packages/client/ui-workspace/src/index.ts`](../packages/client/ui-workspace/src/index.ts)）

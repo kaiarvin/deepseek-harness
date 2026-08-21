@@ -4,6 +4,8 @@ Status: implemented
 
 English | [中文](2026-08-15-cross-session-usage-report.zh.md)
 
+> Superseded in part by [Incremental session usage ledger](../architecture/2026-08-20-incremental-session-usage-ledger.md): the aggregation mechanism changed from scan-on-demand folding to an incremental persisted ledger. The report shape, the `usage.report` wire face, the client dialog, and the rejected alternatives below remain current.
+
 ## Problem
 
 Token accounting (`dsh-token-meter`) was per-session only: three session projections serve the current session's billing and occupancy, and nothing aggregated across the logical corpus. There was no answer to "how many tokens did I use each day, and which models dominate?" — a natural product question the Web GUI could not answer.

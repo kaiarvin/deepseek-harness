@@ -3,4 +3,4 @@
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-18-hand-declared-default-thinking-offer.md
 2026-08-18-hand-declared-default-thinking-offer.md: de59038c57e8793b4e362b67f89475eb04e30cb2
-2026-08-18-hand-declared-default-thinking-offer.zh.md: 276e2d6d98a6505ada0546f915a9bdcffd09b4e6
+2026-08-18-hand-declared-default-thinking-offer.zh.md: b3879f2523e2dc9d7b966c86962c6712da126e5d

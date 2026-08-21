@@ -2,7 +2,9 @@
 
 [English](README.md) | 中文
 
-跨会话 token 用量统计服务（`ctx.sessionUsage`）：把每个逻辑会话的持久日志（优先活动会话，其次通过已挂载的持久化后端读取持久会话）折叠成按本地日 × 模型的计费 token 汇总。折叠通过 `ctx.sessionQuery` 的精确读取（而非搜索索引）逐个读取会话，因此任何挂载了查询接缝的 profile 都能使用本报告。
+跨会话 token 用量统计服务（`ctx.sessionUsage`）：一份增量用量账本。每条携带 provider `usage` 的 `assistant/message` 在追加到活动会话的那一刻就落成一条样本（墙钟时间、provider、model、会话、计费 token）——打开时不进行任何折叠。样本会持久化到磁盘（防抖写入、原子临时文件替换）并在服务启动时加载，因此报告调用只需按查看者的本地日对内存样本分桶即可瞬时返回，全程零语料读取。
+
+当首次启动且没有已持久化的样本时，服务会通过 `ctx.sessionQuery` 的精确读取（而非搜索索引）对会话语料做一次性回填；此后聚合完全由事件驱动。
 
 ## 提供的内容
 
@@ -17,10 +19,12 @@ token 分桶使用互斥的 provider 字段：未缓存 `input`、`output`、`ca
 
 ## 行为
 
-- 报告按请求的时区缓存，并带 stale-while-revalidate 窗口：任何 `session/event` 都会将其标记为脏，但脏缓存仍会在 30 秒内继续对外服务，同时后台重新扫描刷新它——因此快速连续打开对话框不会每次都付出完整的语料库折叠成本。仅当缓存冷，或脏状态超过窗口期时，报告调用才会同步重新扫描（插件的 `freshMs` 配置可调整窗口）。
-- 新扫描结果会持久化到磁盘（`~/.dsh/usage-report/usage-report-<tz>.json`，原子临时文件替换，写失败自动忽略）：进程重启后在磁盘新鲜窗口内（默认 1 小时，`diskFreshMs` 配置可调）会直接复用上次扫描，而不是在首次冷打开时付出完整的语料库折叠成本。版本不匹配或无法读取的缓存文件会被丢弃，代价只是一次重新扫描。
-- 单个会话或读取失败会被跳过并记录警告——一条损坏日志不会阻塞其余报告。
-- 未挂载 `ctx.sessionQuery`（或没有任何活动/持久会话）的组合返回空 `days` 列表。
+- 实时聚合：携带 `assistant/message` 用量的 `session/event` 会立即更新账本，`request/header` 事件则更新每个会话的归属。每次调用报告都反映最新样本——没有陈旧窗口，没有重新扫描。
+- 持久化：样本在短暂防抖后写入 `~/.dsh/usage-report/usage-report-samples.json`（原子临时文件替换，写失败自动忽略），并在销毁时冲刷。重启后直接加载该文件，不再扫描语料。
+- 一次性回填：当没有样本文件时，服务会对完整语料折叠一次（通过 `ctx.sessionQuery` 逐个读取会话）以填充账本；单独失败的会话或读取会被跳过并记录警告。回填与实时流按序号对账，回填已计入的事件绝不会被实时火线重复计入。
+- 保留期：早于 `retentionDays`（默认 40）的样本会在加载与写入时被裁剪；Web 对话框最多展示 30 天。
+- 重放安全：`session/event` 只在实时追加时触发（构造种子——重放、fork、恢复——从不发布），因此重启绝不会重复计数。
+- 未挂载 `ctx.sessionQuery`（或没有任何会话）的组合在实时样本到达前返回空 `days` 列表。
 
 ## 组合
 
@@ -29,8 +33,18 @@ token 分桶使用互斥的 provider 字段：未缓存 `input`、`output`、`ca
 - name: '@deepseek-ai/dsh-session-usage-report'
 ```
 
-本服务没有配置项。Web 用量对话框（`@deepseek-ai/dsh-client-ui-usage-report`）通过 apiproxy 的 `usage.report` RPC 消费同一份折叠结果。
+配置均为可选：`cacheDir`（默认 DSH 主目录下的 `usage-report` 目录）、`retentionDays`（默认 40）与 `persistDelayMs`（默认 1000）。Web 用量对话框（`@deepseek-ai/dsh-client-ui-usage-report`）通过 apiproxy 的 `usage.report` RPC 消费同一份报告。
 
 ## 模型体验
 
 间接地，通过 Web 用量对话框；本服务本身不添加任何提示词、消息、schema、工具或模型调用。
+
+#### KV Cache effect
+
+无；本服务只读取会话日志并为每条带用量的消息写入一个本地样本文件，不产生提示侧或 KV 缓存 token 影响。
+
+## 已知限制与后续工作
+
+- 账本按用量发生时间计数：压缩或删除会话不会追溯移除其已计入的用量（用量报告是账本，不是当前日志的投影）。
+- 早于保留期的样本会被裁剪，因此只保留最近 `retentionDays`（默认 40）天——与对话框的 30 天范围一致。
+- 升级后的首次启动会一次性回填完整语料；语料较大时这一次扫描可能需要数十秒（升级前的报告每次打开都付出同样的成本）。

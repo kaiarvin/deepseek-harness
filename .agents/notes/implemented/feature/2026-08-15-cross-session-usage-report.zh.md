@@ -4,6 +4,8 @@ Status: implemented
 
 [English](2026-08-15-cross-session-usage-report.md) | 中文
 
+> 部分被 [增量会话用量账本](../architecture/2026-08-20-incremental-session-usage-ledger.zh.md) 取代：聚合机制从按需扫描折叠改为增量持久化账本。报告形状、`usage.report` 线上接口、客户端对话框以及下述被否决的备选方案仍然有效。
+
 ## 问题
 
 token 计量（`dsh-token-meter`）此前仅限单会话：三个会话投影服务当前会话的计费与占用，没有任何跨逻辑语料库的聚合。因此"我每天用了多少 token、哪些模型占大头"这类自然的产品问题，Web GUI 无法回答。

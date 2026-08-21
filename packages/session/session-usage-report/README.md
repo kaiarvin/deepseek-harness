@@ -2,7 +2,9 @@
 
 English | [中文](README.zh.md)
 
-Cross-session token usage report service (`ctx.sessionUsage`): folds every logical session's durable log — live sessions first, persisted sessions through the mounted persistence backend — into per-local-day, per-model billed token totals. The fold reads each session once through `ctx.sessionQuery` exact reads (never the search index), so the report works in every profile that mounts the query seam.
+Cross-session token usage report service (`ctx.sessionUsage`): an incremental usage ledger. Each `assistant/message` carrying provider `usage` lands as one sample (wall-clock time, provider, model, session, billed tokens) the moment it is appended to a live session — nothing is folded on open. Samples are persisted durably (debounced, atomic temp-file replace) and loaded at service start, so a report call buckets in-memory samples by the viewer's local day and answers instantly, with no corpus reads.
+
+A first start with no persisted samples backfills once from the session corpus through `ctx.sessionQuery` exact reads (never the search index); afterwards the aggregate is purely event-driven.
 
 ## What it serves
 
@@ -17,10 +19,12 @@ Token buckets are the disjoint provider fields: uncached `input`, `output`, `cac
 
 ## Behavior
 
-- The report is cached per requested timezone with a stale-while-revalidate window: a `session/event` marks it dirty, but a dirty cache keeps serving for 30 seconds while a background rescan refreshes it, so rapid dialog opens do not pay a full corpus fold each time. A report call rescans synchronously only when its cache is cold or has been dirty past the window (the plugin's `freshMs` config tunes the window).
-- Fresh scans are persisted to disk (`~/.dsh/usage-report/usage-report-<tz>.json`, atomic temp-file replace, fail-soft): a process restart reuses the last scan within the disk fresh window (1 hour, `diskFreshMs` config) instead of paying a full corpus fold on the first cold open. A version-mismatched or unreadable cache file is discarded and costs one scan.
-- Sessions or reads that fail individually are skipped with a warning — one corrupt log never blocks the rest of the report.
-- A composition without `ctx.sessionQuery` (or without any persisted/live sessions) yields an empty `days` list.
+- Live aggregation: a `session/event` carrying `assistant/message` usage updates the ledger immediately, and `request/header` events update the per-session attribution. The report reflects the latest sample on every call — no staleness window, no rescan.
+- Persistence: samples are written to `~/.dsh/usage-report/usage-report-samples.json` (atomic temp-file replace, fail-soft) after a short debounce and flushed on disposal. A restart loads the file and never scans the corpus.
+- One-time backfill: when no sample file exists, the service folds the complete corpus once (reads each session through `ctx.sessionQuery`) to seed the ledger; sessions or reads that fail individually are skipped with a warning. The backfill and the live stream are reconciled by sequence, so events the backfill already counted are never double-counted by the live firehose.
+- Retention: samples older than `retentionDays` (default 40) are pruned on load and write; the Web dialog shows at most 30 days.
+- Replay-safe: `session/event` fires only for live appends (constructor seeds — replay, fork, resume — never publish), so a restart never double-counts.
+- A composition without `ctx.sessionQuery` (or without any sessions) yields an empty `days` list until live samples arrive.
 
 ## Composition
 
@@ -29,8 +33,18 @@ Token buckets are the disjoint provider fields: uncached `input`, `output`, `cac
 - name: '@deepseek-ai/dsh-session-usage-report'
 ```
 
-The service has no configuration. The Web usage dialog (`@deepseek-ai/dsh-client-ui-usage-report`) consumes the same fold through the apiproxy `usage.report` RPC.
+Configuration is optional: `cacheDir` (defaults to the DSH home's `usage-report` directory), `retentionDays` (default 40), and `persistDelayMs` (default 1000). The Web usage dialog (`@deepseek-ai/dsh-client-ui-usage-report`) consumes the same report through the apiproxy `usage.report` RPC.
 
 ## Model Experience
 
 Indirectly, through the Web usage dialog; the service itself adds no prompt, message, schema, tool, or model call.
+
+#### KV Cache effect
+
+None; the service reads the session log and writes one local sample file per usage-bearing message, with no prompt-side or KV-cache token effect.
+
+## Known Limitations and Deferred Work
+
+- The ledger counts usage as it happened: compacting or deleting a session does not retroactively remove its counted usage (a usage report is a ledger, not a projection of the current log).
+- Samples older than the retention window are pruned, so only the most recent `retentionDays` (default 40) are kept — matching the dialog's 30-day range.
+- The one-time backfill reads the full corpus once on the first start after an upgrade; on a large corpus that single scan can take tens of seconds (the pre-upgrade report paid the same cost on every open).
