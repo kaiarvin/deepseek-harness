@@ -1,83 +1,85 @@
 # dsh-plugin
 
-我的 DeepSeek Harness（DSH）web profile 插件配置仓库。目标是：**clone 下来 → 跑一次 setup.sh → 插件即用**。
+English | [中文](README.zh.md)
 
-## 目录结构
+My DeepSeek Harness (DSH) web profile plugin configuration repository. Goal: **clone → run setup.sh once → plugins ready**.
+
+## Layout
 
 ```
 dsh-plugin/
-├── profiles/web/        # web profile 插件配置（可提交的声明文件）
-│   ├── package.json         # 依赖清单 + dsh.profile.bundles（插件“货源清单”）
+├── profiles/web/        # web profile plugin config (committable declaration files)
+│   ├── package.json         # dependency manifest + dsh.profile.bundles (the plugin "supply list")
 │   ├── pnpm-workspace.yaml  # allowBuilds / minimumReleaseAgeExclude
-│   ├── pnpm-lock.yaml       # 锁定精确版本（可复现安装）
-│   ├── cordis.patch.yml     # 手动挂载行（无 dsh.bundle 的插件）
-│   ├── cordis.yml           # profile 根（空列表，模板）
-│   └── file-drop-inbox/     # 本地插件包：文件拖入工作区 .dsh/inbox（见其 README）
-├── setup.sh             # 一键部署（bash/macOS/Linux）
-├── setup.bat            # 一键部署（Windows cmd，等价于 setup.sh）
-└── .gitignore           # 忽略 node_modules 等机器相关产物
+│   ├── pnpm-lock.yaml       # pinned exact versions (reproducible install)
+│   ├── cordis.patch.yml     # manual mount rows (plugins without a dsh.bundle)
+│   ├── cordis.yml           # profile root (empty list, template)
+│   └── file-drop-inbox/     # local plugin package: drop files into the workspace .dsh/inbox (see its README)
+├── setup.sh             # one-shot deploy (bash / macOS / Linux)
+├── setup.bat            # one-shot deploy (Windows cmd, equivalent to setup.sh)
+└── .gitignore           # ignores node_modules and other machine-specific artifacts
 ```
 
-## 已配置的插件
+## Configured plugins
 
-| 插件 | 用途 | 安装方式 |
+| Plugin | Purpose | Install method |
 |---|---|---|
-| `dsh-better-sidebar` | 右侧栏工作台（文件/编辑器/终端/Git/浏览器） | npm，bundle 自动挂载 |
-| `dsh-skill-mcp-panel` | Web 界面管理 skills 与 MCP（启停/删除/添加/迁移/分组；MCP 面板） | GitHub release tarball，bundle 自动挂载 |
-| `auto-compact` | 自动压缩 | npm，bundle 自动挂载 |
-| `dsh-file-drop-inbox` | 文件拖入工作区 `.dsh/inbox`，草稿插入只显示文件名的 chip，发送为 `[文件名](<路径>)`，气泡中可点击打开文档（log/配置等非图片；图片仍走内置 intake） | 本地包 `profiles/web/file-drop-inbox`，bundle 自动挂载 |
+| `dsh-better-sidebar` | Right-rail workbench (files/editor/terminal/Git/browser) | npm, bundle auto-mount |
+| `dsh-skill-mcp-panel` | Manage skills and MCP from the Web UI (enable/disable/remove/add/migrate/group; MCP panel) | GitHub release tarball, bundle auto-mount |
+| `auto-compact` | Automatic compaction | npm, bundle auto-mount |
+| `dsh-file-drop-inbox` | Drop files into the workspace `.dsh/inbox`; the draft inserts a filename-only chip, sent as `[filename](<path>)`; the bubble link opens the document (logs/configs and other non-images; images still use the built-in intake) | Local package `profiles/web/file-drop-inbox`, bundle auto-mount |
 
-## 快速开始（新机器）
+## Quick start (new machine)
 
-前置：本机已有 dsh 本体（deepseek-harness checkout，能跑 `pnpm dsh web`），node ≥ 20、pnpm ≥ 10。
+Prerequisite: a working dsh checkout (deepseek-harness, able to run `pnpm dsh web`), node ≥ 20, pnpm ≥ 10.
 
 ```sh
-# 1. clone 本仓库（或你已 clone 的 deepseek-harness 里的 dsh-plugin 目录）
-git clone <你的仓库地址> dsh-plugin
+# 1. clone this repository (or use the dsh-plugin directory inside your deepseek-harness clone)
+git clone <your-repo-url> dsh-plugin
 cd dsh-plugin
 
-# 2. 一键部署插件配置
+# 2. one-shot deploy of the plugin config
 bash setup.sh
-#    或用 DSH_HOME 指定非默认位置：
+#    or point DSH_HOME at a non-default location:
 #    DSH_HOME=/custom/dsh bash setup.sh
-#    预览不执行：
+#    preview without executing:
 #    bash setup.sh --dry-run
 
-# 3. 重启 dsh web（插件 host 半需要重启才生效）
-#    在 dsh 终端 Ctrl+C 后重新 pnpm dsh web，浏览器硬刷新 Cmd+Ctrl+R
+# 3. restart dsh web (the plugin host half needs a restart to take effect)
+#    Ctrl+C in the dsh terminal, then pnpm dsh web again; hard-refresh the browser with Cmd+Ctrl+R
 ```
 
-**Windows 用户**：用 `setup.bat`（等价于 setup.sh），在 cmd/PowerShell 中：
+**Windows users**: use `setup.bat` (equivalent to setup.sh), from cmd/PowerShell:
 
 ```bat
-:: 2. 一键部署插件配置（等价的 Windows 命令）
+:: 2. one-shot deploy of the plugin config (equivalent Windows command)
 setup.bat
-::    或用 DSH_HOME 指定非默认位置：
+::    or point DSH_HOME at a non-default location:
 ::    set DSH_HOME=C:\path\to\dsh && setup.bat
-::    预览不执行：
+::    preview without executing:
 ::    setup.bat --dry-run
 ```
 
-> 注意：`setup.bat` 与 `setup.sh` 等价；脚本内只用 ASCII（无中文），LF / CRLF 行尾均可被 cmd 正确解析，仓库 `.gitattributes` 统一按 LF 管理。
+> Note: `setup.bat` and `setup.sh` are equivalent; the scripts use ASCII only (no Chinese), and both LF and CRLF line endings parse correctly in cmd. The repository `.gitattributes` manages everything as LF.
 
-验证是否生效：
+Verify it took effect:
 
 ```sh
 pnpm dsh --profile web --dump-config | grep -E 'better-sidebar|skill-mcp-panel|file-drop-inbox'
 ```
 
-浏览器里：设置 → 插件下方应出现「技能」页和「MCP」页（skill-mcp-panel），右侧栏出现工作台（better-sidebar）。
+In the browser: Settings → the "Skills" and "MCP" pages should appear below the plugins (skill-mcp-panel), and the workbench appears in the right rail (better-sidebar).
 
-## 日常维护
+## Daily maintenance
 
-**新增插件**：在 `~/.dsh/profiles/web` 执行 `pnpm dsh plugin --profile web add <pkg>`，然后把更新后的 `package.json` / `pnpm-lock.yaml`（及必要的 `cordis.patch.yml` 挂载行）同步回本仓库 `profiles/web/` 并提交。
+**Add a plugin**: in `~/.dsh/profiles/web`, run `pnpm dsh plugin --profile web add <pkg>`, then sync the updated `package.json` / `pnpm-lock.yaml` (plus any required `cordis.patch.yml` mount row) back to `profiles/web/` in this repository and commit.
 
-**更新插件**：同上，用 `pnpm dsh plugin --profile web update <pkg>`，同步 lockfile。
+**Update a plugin**: same flow with `pnpm dsh plugin --profile web update <pkg>`, then sync the lockfile.
 
-**卸载插件**：`pnpm dsh plugin --profile web remove <pkg>`，同步声明文件。
+**Remove a plugin**: `pnpm dsh plugin --profile web remove <pkg>`, then sync the declaration files.
 
-## 注意事项
+## Notes
 
-- **node_modules 不提交**：它含平台相关二进制（node-pty 等）和指向本机绝对路径的符号链接，clone 到别处会断。由 `pnpm install` 按 lockfile 精确重建。
-- **dsh 本体与本配置分离**：本仓库只管理「插件配置层」（`~/.dsh/profiles/web`）。dsh 本体（deepseek-harness）是另一个仓库，两者都需就位才能运行。
-- 若插件声明 `dsh.bundle.patch`，`dsh plugin add` 会自动追加进 `dsh.profile.bundles`；无 bundle 的插件需手动加挂载行到 `cordis.patch.yml`。
+- **node_modules is not committed**: it contains platform-specific binaries (node-pty etc.) and symlinks pointing at local absolute paths, which would break elsewhere. `pnpm install` rebuilds it exactly from the lockfile.
+- **dsh itself is separate from this config**: this repository only manages the plugin configuration layer (`~/.dsh/profiles/web`). The dsh checkout (deepseek-harness) is another repository; both must be in place to run.
+- If a plugin declares `dsh.bundle.patch`, `dsh plugin add` appends it to `dsh.profile.bundles` automatically; plugins without a bundle need a manual mount row in `cordis.patch.yml`.
