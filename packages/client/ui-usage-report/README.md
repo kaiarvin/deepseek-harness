@@ -29,3 +29,8 @@ None, as the dialog is a read-only RPC consumer over the host's usage.report and
 #### KV Cache effect
 
 None; this package neither assembles nor sends a provider request.
+
+## Known Limitations and Deferred Work
+
+- **The report is cut to the last 30 local days** — the range selector offers 7 or 30 days, and the host's session-usage-report service prunes samples older than its retention window, so older usage is not counted.
+- **Usage is counted as it happened, not as a projection of the current logs** — compaction and session deletion do not retroactively remove counted usage; the ledger is event-driven, not a replay of the present corpus.
