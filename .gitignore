@@ -39,3 +39,9 @@ apps/web/dist/
 worktrees/
 .agents/worktrees/
 .typert-*/
+# local runtime data: file-drop-inbox plugin inbox (dropped files), etc.
+/.dsh/
+# dsh-plugin bundles its pre-built plugin source under lib/ (no build step);
+# the root `lib/` ignore above is only for TypeScript build output.
+!dsh-plugin/profiles/web/file-drop-inbox/lib/
+!dsh-plugin/profiles/web/file-drop-inbox/lib/**

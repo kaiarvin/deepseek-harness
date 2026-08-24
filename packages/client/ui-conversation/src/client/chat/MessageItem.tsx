@@ -151,15 +151,41 @@ function TurnMaxTokensItem({ t }: {
  * Plain-text `/name` / `@name` word-boundary tokens decorate (the sent text
  * IS the reference — the bubble uses the same plainest token
  * scan as the composer, minus the lexicon: sent tokens were validated at
- * compose time, so shape alone decorates).
+ * compose time, so shape alone decorates). A markdown file link
+ * `[name](<absolute path>)` — the shape file-drop-inbox inserts — renders as
+ * an openable link (the same Host opener the tool rows use), so a dropped
+ * file is clickable exactly like a produced-file mention; any other text,
+ * including links whose target is not an absolute path, stays literal.
  */
-function projectUserText(text: string, sessionLabels: readonly string[]): ReactNode {
-  const ranges: { start: number; end: number; label: string; kind: 'session' | 'plain' }[] = []
+/** One decorated user-text part in flow order (links and reference tokens cannot overlap by shape). */
+type UserTextPart =
+  | { kind: 'file'; start: number; end: number; label: string; target: string }
+  | { kind: 'session'; start: number; end: number; label: string }
+  | { kind: 'plain'; start: number; end: number; label: string }
+
+/** Absolute filesystem spelling (the same rule the composer's chip catcher uses). */
+function isAbsolutePath(path: string): boolean {
+  return path.startsWith('/') || /^[A-Za-z]:[\\/]/.test(path)
+}
+
+function projectUserText(text: string, sessionLabels: readonly string[], openFile?: (path: string) => void): ReactNode {
+  const parts: UserTextPart[] = []
+  // A markdown file link `[name](<absolute path>)` — the shape file-drop-inbox
+  // inserts — renders as an openable link (the same Host opener the tool rows
+  // use), so a dropped file is clickable exactly like a produced-file mention;
+  // any other link (non-absolute target) stays literal.
+  const linkRe = /\[([^\]\n]+)\]\(<([^>\n]+)>\)/g
+  let link: RegExpExecArray | null
+  while ((link = linkRe.exec(text)) !== null) {
+    const target = link[2] ?? ''
+    if (!isAbsolutePath(target)) continue
+    parts.push({ kind: 'file', start: link.index, end: link.index + link[0].length, label: link[1] ?? '', target })
+  }
   for (const rawLabel of [...new Set(sessionLabels)].sort((a, b) => b.length - a.length)) {
     const label = `@${rawLabel}`
     let start = text.indexOf(label)
     while (start >= 0) {
-      ranges.push({ start, end: start + label.length, label, kind: 'session' })
+      parts.push({ start, end: start + label.length, label, kind: 'session' })
       start = text.indexOf(label, start + label.length)
     }
   }
@@ -172,16 +198,33 @@ function projectUserText(text: string, sessionLabels: readonly string[]): ReactN
       ? rawLabel
       : rawLabel.replace(/[.,;:!?，。；：！？]+$/gu, '')
     if (label.length <= 1) continue
-    ranges.push({ start: tokenStart, end: tokenStart + label.length, label, kind: 'plain' })
+    parts.push({ start: tokenStart, end: tokenStart + label.length, label, kind: 'plain' })
   }
-  ranges.sort((a, b) => a.start - b.start
-    || (a.kind === b.kind ? b.end - a.end : a.kind === 'session' ? -1 : 1))
-  const parts: ReactNode[] = []
+  parts.sort((a, b) => a.start - b.start
+    || (a.kind === b.kind ? b.end - a.end : a.kind === 'session' ? -1 : a.kind === 'file' ? -1 : 1))
+  const rendered: ReactNode[] = []
   let cursor = 0
-  for (const range of ranges) {
-    if (range.start < cursor) continue
-    const { start: tokenStart, end, label, kind } = range
-    if (tokenStart > cursor) parts.push(<MessageText key={cursor} text={text.slice(cursor, tokenStart)} />)
+  for (const part of parts) {
+    if (part.start < cursor) continue
+    const { start: tokenStart, end, label, kind } = part
+    if (tokenStart > cursor) rendered.push(<MessageText key={cursor} text={text.slice(cursor, tokenStart)} />)
+    if (kind === 'file') {
+      const target = part.target
+      rendered.push(
+        <button
+          key={tokenStart}
+          type="button"
+          className={css.fileLink}
+          title={target}
+          aria-label={label}
+          onClick={() => { if (openFile !== undefined) openFile(target) }}
+        >
+          {label}
+        </button>,
+      )
+      cursor = end
+      continue
+    }
     const referenceKind = kind === 'session'
       ? 'session'
       : label.startsWith('@')
@@ -192,7 +235,7 @@ function projectUserText(text: string, sessionLabels: readonly string[]): ReactN
       : referenceKind === 'session'
         ? label.slice(1)
         : label.slice(1).replace(/^"|"$/gu, '').split(/[\\/]/u).filter(Boolean).at(-1) ?? label.slice(1)
-    parts.push(
+    rendered.push(
       <span
         key={tokenStart}
         className={css.refChip}
@@ -207,14 +250,14 @@ function projectUserText(text: string, sessionLabels: readonly string[]): ReactN
     )
     cursor = end
   }
-  if (parts.length === 0) return <MessageText text={text} />
-  if (cursor < text.length) parts.push(<MessageText key={cursor} text={text.slice(cursor)} />)
-  return <>{parts}</>
+  if (rendered.length === 0) return <MessageText text={text} />
+  if (cursor < text.length) rendered.push(<MessageText key={cursor} text={text.slice(cursor)} />)
+  return <>{rendered}</>
 }
 
 /** Right-aligned bubble shared by user and steering rows. */
 function UserStyleBubble({
-  content, renderMessageImages, actions, pending = false, referenceLabels = [], t,
+  content, renderMessageImages, actions, pending = false, referenceLabels = [], openFile, t,
 }: {
   content: readonly unknown[]
   renderMessageImages: ChatNodeOwnerProps['renderMessageImages']
@@ -224,6 +267,8 @@ function UserStyleBubble({
   pending?: boolean
   /** Exact session mention labels associated by the adjacent recall node. */
   referenceLabels?: readonly string[]
+  /** Host opener for file links inside the bubble text; absent → links stay literal. */
+  openFile?: (path: string) => void
   t: ChatViewSlotProps['t']
 }): ReactNode {
   const { text, images, rest } = contentParts(content)
@@ -234,7 +279,7 @@ function UserStyleBubble({
       <div className={css.userStack}>
         {renderMessageImages({ images, align: 'end' })}
         {showBubble && <div className={css.bubble}>
-          {projectUserText(text, referenceLabels)}
+          {projectUserText(text, referenceLabels, openFile)}
           {rest.map((block, i) => <JsonBlock key={i} label={t('message.extraBlock')} payload={block} truncatedLabel={truncated} />)}
         </div>}
         {referenceLabels.length > 0 && (
@@ -279,7 +324,7 @@ export function PendingSteeringBubble({ content, renderMessageImages, t }: {
 
 /** User and admitted-steering keyed Chat renderer. */
 export const UserMessageNodeView = memo(function UserMessageNodeView({
-  node, renderMessageImages, t,
+  node, renderMessageImages, openFile, t,
 }: ChatNodeViewProps<'user' | 'steering'>) {
   const data = node.data
   return (
@@ -287,6 +332,7 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
       content={data.content}
       renderMessageImages={renderMessageImages}
       {...data.referenceLabels === undefined ? {} : { referenceLabels: data.referenceLabels }}
+      openFile={openFile}
       t={t}
       actions={text => (
         <MessageIconActions

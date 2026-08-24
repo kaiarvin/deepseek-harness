@@ -41,10 +41,10 @@ Status: implemented
 
 occurrence 表与 chip 三投影：
 
-- 每颗引用在 draft 中占一个 `U+FFFC`；表项 `{occurrenceId, source, ref, offset, label, clipboardText, invalid?}`；同名 chip 因 occurrenceId 独立。
-- 一切编辑同 transaction 更新 draft 与表：区间平移；与占位符相交的删除/替换作用于整颗。
-- 单字符占位使键盘原子性大半原生成立（caret 无内部位；Backspace/方向键/Shift 扩选原生即整颗）；鼠标点 chip 由 backdrop 命中 → 整颗 setSelectionRange。
-- 视觉投影 = label：backdrop 在占位符 offset 渲染 chip（textarea 字形不可见），invalid 走失效样式。
+- 每颗引用在 draft 中占一段 `U+FFFC` 单元格——每格 4em pill 宽，段长按 label 估算以保证 pill 不截断文件名；表项 `{occurrenceId, source, ref, offset, length, label, clipboardText, invalid?}`；同名 chip 因 occurrenceId 独立。格数是插入时的文本宽度估算；绘制后 composer 按 pill 的自然（max-content）宽度实测，并经机器内部 `resize-chip` 事件（一次 undo 单元）把段调到精确适配——双向：估算过大同样会收缩（受约束的 scrollWidth 在 label 放得下时只能报出钳制宽度，无法发现过大）。
+- 一切编辑同 transaction 更新 draft 与表：区间平移；与占位符段相交的删除/替换作用于整颗。
+- 占位符段使键盘原子性大半原生成立（caret 无内部位；Backspace/方向键/Shift 扩选原生即整颗）。可见 pill 紧贴 label（内层 overlay，不铺满整段），段长只表现为下一字形前的间距。
+- 视觉投影 = label：backdrop 在占位符 offset 渲染 chip（textarea 字形不可见），invalid 走失效样式。拖入的文件 chip（绝对路径 ref）是真实点击目标：一层透明 click-catcher 在 textarea 上方复刻 draft 流，每个路径 chip 一个按钮，点击经与 chat 视图文件链接相同的 Host opener 打开文件；非路径 chip 与无 opener 时保持 textarea 的 caret 行为。
 - 剪贴板/持久化投影 = clipboardText：copy/cut 把选区内占位符展开；draft 持久化 mirror 写同一投影（chat store 里永远是普通文本，刷新 seed 语义 = 全选复制→重开→粘贴，chip 跨刷新降级为文本）。
 - 模型投影 = submit 时经 source `codec.serialize` 逐颗生成（归 submit attempt 的 signal 与陈旧守卫；owner 缺失/失败/取消则不发送，不降级为 `/name`）。
 

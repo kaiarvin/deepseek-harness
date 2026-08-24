@@ -331,6 +331,16 @@ export class SessionInputShell implements SessionInput {
   }
 
   /**
+   * Grow one chip's placeholder run (post-paint label measurement; see
+   * ComposerKeyboard.resizeChip — the shell satisfies that face structurally).
+   * @param occurrenceId - the chip's machine-minted identity.
+   * @param cells - the measured cell count.
+   */
+  resizeChip(occurrenceId: number, cells: number): void {
+    this.run(this.core.dispatch({ type: 'resize-chip', occurrenceId, cells }))
+  }
+
+  /**
    * Consume one command token after business success (scoped consume-token
    * event listener body). Span guard: revision CAS then splice; bare-token
    * guard: trimmed-draft equality then clear.
@@ -472,7 +482,7 @@ export class SessionInputShell implements SessionInput {
     })).then(
       (parts) => {
         if (this.disposed) return
-        // Splice model forms over their display ranges (offsets are draft-time;
+        // Splice model forms over their placeholder runs (offsets are draft-time;
         // parts arrive offset-sorted since the table is).
         let out = ''
         let cursor = 0

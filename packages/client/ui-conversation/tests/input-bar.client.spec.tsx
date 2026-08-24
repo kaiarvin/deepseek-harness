@@ -93,6 +93,8 @@ interface BenchOptions {
   commandMenuOpen?: boolean
   busyEnter?: 'queue' | 'steer'
   toggleCommandMenu?: (selection: { start: number; end: number }) => void
+  /** Host file opener (chip-click route); absent = no clickable chips. */
+  openFile?: (path: string) => void
 }
 
 /** One pending queue row (the runtime snapshot shape, as the dock tests build it). */
@@ -187,6 +189,7 @@ function bench(over?: BenchOptions) {
     useMenuLauncher: bindSnapshotSelector(menuLauncher),
     stop,
     command: over?.command ?? (() => Promise.resolve(true)),
+    openFile: over?.openFile,
     // Mirrors the real lookup chain (conversation namespace, then common).
     t: over?.t ?? makeTranslate(zh, commonZh),
     renderSlot,
@@ -212,17 +215,6 @@ function bench(over?: BenchOptions) {
     menuLauncher,
     steerQueue: over?.steerQueue,
   }
-}
-
-/**
- * Dispatch the native `beforeinput` the composer reads the pre-edit selection
- * from. The DOM event carries no range for a textarea (`getTargetRanges()` is
- * empty there), so the element's own selection plus `inputType` is the signal.
- * The selection each gesture leaves is the engine-observed one: a delete over a
- * selection reports that selection, a caret delete reports the bare caret.
- */
-function beforeInput(el: HTMLTextAreaElement, inputType = 'insertText'): void {
-  el.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType }))
 }
 
 function attachmentOwner(slotCalls: readonly { key: string; owner: unknown }[]): ComposerAttachmentsOwnerProps {
@@ -1172,188 +1164,205 @@ describe('decorations', () => {
     expect(view.container.querySelector('[data-decoration="hint"]')?.textContent).toBe('输入目标，智能体将持续执行')
   })
 
-  it('an inserted reference decorates its complete inline display range', () => {
+  it('an inserted reference renders as a chip at its placeholder offset', () => {
     const { view, shell } = bench()
-    const reference = {
-      source: 'reference', ref: 'w1', label: '会话一', appearance: 'session' as const, clipboardText: '@w1',
-    }
     act(() => {
       shell.setDraft('参考 @w1 内容')
       shell.insertReference(
-        reference,
+        { source: 'subagent', ref: 'w1', label: '@w1', clipboardText: '@w1' },
         { start: 3, end: 6, draftRev: shell.snapshot.draftRev },
       )
     })
     const chip = view.container.querySelector('[data-decoration="chip"]')
-    expect(chip?.textContent).toBe('@会话一')
-    expect(chip?.getAttribute('data-reference-appearance')).toBe('session')
-    expect(chip?.querySelector('svg')).not.toBeNull()
+    expect(chip?.textContent).toBe('@w1')
     expect(shell.snapshot.occurrences).toHaveLength(1)
-    expect(shell.snapshot.draft).toBe('参考 @会话一 内容')
-    expect(shell.snapshot.occurrences[0]).toMatchObject({ offset: 3, length: 4 })
+    // The draft carries exactly one placeholder char where the token was.
+    expect(shell.snapshot.draft).toBe('参考 \uFFFC 内容')
   })
 
-  it('keeps the textarea glyph layer transparent when a structured reference becomes disabled', () => {
-    const { view, shell, session, textarea } = bench()
+  it('a long label renders a chip spanning multiple 4em cells', () => {
+    const { view, shell } = bench()
     act(() => {
-      shell.setDraft('@w1')
-      shell.insertReference({
-        source: 'reference', ref: 'w1', label: '会话一', appearance: 'session', clipboardText: '@w1',
-      }, { start: 0, end: 3, draftRev: shell.snapshot.draftRev })
-      session.set(snapshotOf({ removed: true }))
+      shell.setDraft('参考 @w1 内容')
+      shell.insertReference(
+        {
+          source: 'inbox-file', ref: 'service_list-4.json', label: 'service_list-4.json',
+          clipboardText: '[service_list-4.json](<E:/x>)',
+        },
+        { start: 3, end: 6, draftRev: shell.snapshot.draftRev },
+      )
     })
-    const backdrop = view.container.querySelector('[data-input-backdrop]')
-    expect(textarea.disabled).toBe(true)
-    expect(backdrop?.getAttribute('data-disabled')).toBe('true')
-    expect(backdrop?.querySelector('[data-decoration="chip"] svg')).not.toBeNull()
+    const chip = view.container.querySelector('[data-decoration="chip"]') as HTMLElement | null
+    expect(chip?.style.width).toBe('8em') // 2 cells × 4em
+    expect(chip?.querySelector('[data-chip-label]')?.textContent).toBe('service_list-4.json')
+    expect(shell.snapshot.draft).toBe('参考 \uFFFC\uFFFC 内容')
   })
 
-  it('Backspace and Delete remove a reference as one range at its boundaries', () => {
-    const reference = {
-      source: 'reference', ref: 'w1', label: '会话一', appearance: 'session' as const, clipboardText: '@w1',
+  it('the post-paint measurement grows the pill when the label out-grows its estimate', () => {
+    const original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollWidth')
+    Object.defineProperty(HTMLElement.prototype, 'scrollWidth', {
+      configurable: true,
+      get(this: HTMLElement) {
+        if (this.hasAttribute('data-chip-pill')) return 500 // wider than any estimate
+        return (original?.get?.call(this) as number) ?? 0
+      },
+    })
+    try {
+      const { view, shell } = bench()
+      const resizeSpy = vi.spyOn(shell, 'resizeChip')
+      act(() => {
+        shell.setDraft('参考 @w1 内容')
+        shell.insertReference(
+          {
+            source: 'inbox-file', ref: 'r', label: 'service_list-4.json',
+            clipboardText: '[service_list-4.json](<E:/x>)',
+          },
+          { start: 3, end: 6, draftRev: shell.snapshot.draftRev },
+        )
+      })
+      const chip = view.container.querySelector('[data-decoration="chip"]') as HTMLElement | null
+      expect(resizeSpy).toHaveBeenCalled()
+      // Estimate: 2 cells; measured 500px at the 16px jsdom font → 6 cells.
+      expect(chip?.style.width).toBe('24em')
+      expect(shell.snapshot.occurrences[0]?.length).toBe(6)
+      // The correction settles: the settled pill is not resized again.
+      const rev = shell.snapshot.draftRev
+      act(() => {})
+      expect(shell.snapshot.draftRev).toBe(rev)
+      expect(shell.snapshot.occurrences[0]?.length).toBe(6)
+    } finally {
+      if (original !== undefined) Object.defineProperty(HTMLElement.prototype, 'scrollWidth', original)
     }
-    const backspace = bench()
+  })
+
+  it('the post-paint measurement shrinks the pill when the estimate overshoots', () => {
+    const original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollWidth')
+    Object.defineProperty(HTMLElement.prototype, 'scrollWidth', {
+      configurable: true,
+      get(this: HTMLElement) {
+        if (this.hasAttribute('data-chip-pill')) return 20 // far narrower than the 2-cell estimate
+        return (original?.get?.call(this) as number) ?? 0
+      },
+    })
+    try {
+      const { view, shell } = bench()
+      const resizeSpy = vi.spyOn(shell, 'resizeChip')
+      act(() => {
+        shell.setDraft('参考 @w1 内容')
+        shell.insertReference(
+          {
+            source: 'inbox-file', ref: 'r', label: 'service_list-4.json',
+            clipboardText: '[service_list-4.json](<E:/x>)',
+          },
+          { start: 3, end: 6, draftRev: shell.snapshot.draftRev },
+        )
+      })
+      const chip = view.container.querySelector('[data-decoration="chip"]') as HTMLElement | null
+      expect(resizeSpy).toHaveBeenCalled()
+      // Estimate: 2 cells; measured 20px → ceil(20×0.72/64) = 1 cell.
+      expect(chip?.style.width).toBe('4em')
+      expect(shell.snapshot.occurrences[0]?.length).toBe(1)
+    } finally {
+      if (original !== undefined) Object.defineProperty(HTMLElement.prototype, 'scrollWidth', original)
+    }
+  })
+
+  it('a Windows-path chip is a click target that opens the file with the host opener', () => {
+    const openFile = vi.fn()
+    const { view, shell } = bench({ openFile })
     act(() => {
-      backspace.shell.setDraft('前 @w1 后')
-      backspace.shell.insertReference(
-        reference,
-        { start: 2, end: 5, draftRev: backspace.shell.snapshot.draftRev },
+      shell.setDraft('参考 内容')
+      shell.insertReference(
+        {
+          source: 'inbox-file', ref: 'E:/x/service_list-4.json', label: 'service_list-4.json',
+          clipboardText: '[service_list-4.json](<E:/x/service_list-4.json>)',
+        },
+        { start: 3, end: 3, draftRev: shell.snapshot.draftRev },
       )
     })
-    backspace.textarea.setSelectionRange(6, 6)
-    fireEvent.keyDown(backspace.textarea, { key: 'Backspace' })
-    expect(backspace.shell.snapshot).toMatchObject({ draft: '前  后', occurrences: [] })
+    const catcher = view.container.querySelector('[data-input-catcher]')
+    expect(catcher).not.toBeNull()
+    const chipButton = view.container.querySelector('[data-input-catcher] button') as HTMLButtonElement | null
+    expect(chipButton?.getAttribute('aria-label')).toBe('service_list-4.json')
+    fireEvent.mouseDown(chipButton!) // the focus-keeping mousedown must not throw
+    fireEvent.click(chipButton!)
+    expect(openFile).toHaveBeenCalledWith('E:/x/service_list-4.json')
+  })
 
-    const forwardDelete = bench()
+  it('a POSIX-path chip is clickable too', () => {
+    const openFile = vi.fn()
+    const { view, shell } = bench({ openFile })
     act(() => {
-      forwardDelete.shell.setDraft('前 @w1 后')
-      forwardDelete.shell.insertReference(
-        reference,
-        { start: 2, end: 5, draftRev: forwardDelete.shell.snapshot.draftRev },
+      shell.setDraft('参考 内容')
+      shell.insertReference(
+        {
+          source: 'inbox-file', ref: '/w/proj/.dsh/inbox/app.log', label: 'app.log',
+          clipboardText: '[app.log](</w/proj/.dsh/inbox/app.log>)',
+        },
+        { start: 3, end: 3, draftRev: shell.snapshot.draftRev },
       )
     })
-    forwardDelete.textarea.setSelectionRange(2, 2)
-    fireEvent.keyDown(forwardDelete.textarea, { key: 'Delete' })
-    expect(forwardDelete.shell.snapshot).toMatchObject({ draft: '前  后', occurrences: [] })
+    const chipButton = view.container.querySelector('[data-input-catcher] button') as HTMLButtonElement | null
+    expect(chipButton).not.toBeNull()
+    fireEvent.click(chipButton!)
+    expect(openFile).toHaveBeenCalledWith('/w/proj/.dsh/inbox/app.log')
   })
 
-  it('typing the trigger char immediately before a reference keeps it structured', () => {
-    const { shell, textarea } = bench()
+  it('mixed chips: only absolute-path chips render click targets', () => {
+    const openFile = vi.fn()
+    const { view, shell } = bench({ openFile })
     act(() => {
-      shell.setDraft('@w1')
-      shell.insertReference({
-        source: 'reference', ref: 'w1', label: '会话一', appearance: 'session', clipboardText: '@w1',
-      }, { start: 0, end: 3, draftRev: shell.snapshot.draftRev })
+      shell.setDraft('参考 内容')
+      shell.insertReference(
+        {
+          source: 'inbox-file', ref: 'E:/x/service_list-4.json', label: 'service_list-4.json',
+          clipboardText: '[service_list-4.json](<E:/x/service_list-4.json>)',
+        },
+        { start: 3, end: 3, draftRev: shell.snapshot.draftRev },
+      )
     })
-    expect(shell.snapshot.draft).toBe('@会话一 ')
-    // The inserted char equals the reference's own leading trigger, so the two
-    // drafts alone cannot say whether it landed before or after that trigger.
-    textarea.setSelectionRange(0, 0)
     act(() => {
-      beforeInput(textarea)
-      fireEvent.change(textarea, { target: { value: '@@会话一 ' } })
+      const snap = shell.snapshot
+      shell.insertReference(
+        { source: 'subagent', ref: 'w1', label: '@w1', clipboardText: '@w1' },
+        { start: snap.draft.length, end: snap.draft.length, draftRev: snap.draftRev },
+      )
     })
-    expect(shell.snapshot.draft).toBe('@@会话一 ')
-    expect(shell.snapshot.occurrences).toHaveLength(1)
-    expect(shell.snapshot.occurrences[0]).toMatchObject({ offset: 1, length: 4 })
+    const catcher = view.container.querySelector('[data-input-catcher]')
+    expect(catcher).not.toBeNull()
+    // The path chip is a button; the non-path chip is a width-only cell.
+    expect(catcher?.querySelectorAll('button')).toHaveLength(1)
+    expect(catcher?.querySelectorAll('[class*="catcherCell"]')).toHaveLength(1)
+    fireEvent.click(catcher!.querySelector('button')!)
+    expect(openFile).toHaveBeenCalledWith('E:/x/service_list-4.json')
   })
 
-  it('a selection-replacing delete before a reference keeps it structured', () => {
-    const { shell, textarea } = bench()
+  it('a non-path chip alone renders no click-catcher layer', () => {
+    const openFile = vi.fn()
+    const { view, shell } = bench({ openFile })
     act(() => {
-      shell.setDraft('@@w1')
-      shell.insertReference({
-        source: 'reference', ref: 'w1', label: '会话一', appearance: 'session', clipboardText: '@w1',
-      }, { start: 1, end: 4, draftRev: shell.snapshot.draftRev })
+      shell.setDraft('参考 @w1 内容')
+      shell.insertReference(
+        { source: 'subagent', ref: 'w1', label: '@w1', clipboardText: '@w1' },
+        { start: 3, end: 6, draftRev: shell.snapshot.draftRev },
+      )
     })
-    expect(shell.snapshot.draft).toBe('@@会话一 ')
-    textarea.setSelectionRange(0, 1)
-    act(() => {
-      beforeInput(textarea, 'deleteContentBackward')
-      fireEvent.change(textarea, { target: { value: '@会话一 ' } })
-    })
-    expect(shell.snapshot.draft).toBe('@会话一 ')
-    expect(shell.snapshot.occurrences).toHaveLength(1)
-    expect(shell.snapshot.occurrences[0]).toMatchObject({ offset: 0, length: 4 })
+    expect(view.container.querySelector('[data-input-catcher]')).toBeNull()
   })
 
-  it('a caret Backspace before a reference keeps it structured', () => {
-    const { shell, textarea } = bench()
+  it('without a host opener the chip is not a click target', () => {
+    const { view, shell } = bench() // no openFile
     act(() => {
-      shell.setDraft('@@w1')
-      shell.insertReference({
-        source: 'reference', ref: 'w1', label: '会话一', appearance: 'session', clipboardText: '@w1',
-      }, { start: 1, end: 4, draftRev: shell.snapshot.draftRev })
+      shell.setDraft('参考 内容')
+      shell.insertReference(
+        {
+          source: 'inbox-file', ref: 'E:/x/service_list-4.json', label: 'service_list-4.json',
+          clipboardText: '[service_list-4.json](<E:/x/service_list-4.json>)',
+        },
+        { start: 3, end: 3, draftRev: shell.snapshot.draftRev },
+      )
     })
-    expect(shell.snapshot.draft).toBe('@@会话一 ')
-    // A caret delete reports the bare caret, never the character it removes.
-    textarea.setSelectionRange(1, 1)
-    act(() => {
-      beforeInput(textarea, 'deleteContentBackward')
-      fireEvent.change(textarea, { target: { value: '@会话一 ' } })
-    })
-    expect(shell.snapshot.draft).toBe('@会话一 ')
-    expect(shell.snapshot.occurrences).toHaveLength(1)
-    expect(shell.snapshot.occurrences[0]).toMatchObject({ offset: 0, length: 4 })
-  })
-
-  it('a caret Delete before a reference keeps it structured', () => {
-    const { shell, textarea } = bench()
-    act(() => {
-      shell.setDraft('@@w1')
-      shell.insertReference({
-        source: 'reference', ref: 'w1', label: '会话一', appearance: 'session', clipboardText: '@w1',
-      }, { start: 1, end: 4, draftRev: shell.snapshot.draftRev })
-    })
-    textarea.setSelectionRange(0, 0)
-    act(() => {
-      beforeInput(textarea, 'deleteContentForward')
-      fireEvent.change(textarea, { target: { value: '@会话一 ' } })
-    })
-    expect(shell.snapshot.draft).toBe('@会话一 ')
-    expect(shell.snapshot.occurrences).toHaveLength(1)
-    expect(shell.snapshot.occurrences[0]).toMatchObject({ offset: 0, length: 4 })
-  })
-
-  it('a caret word delete before a reference keeps it structured', () => {
-    const { shell, textarea } = bench()
-    act(() => {
-      shell.setDraft('word @w1')
-      shell.insertReference({
-        source: 'reference', ref: 'w1', label: '会话一', appearance: 'session', clipboardText: '@w1',
-      }, { start: 5, end: 8, draftRev: shell.snapshot.draftRev })
-    })
-    expect(shell.snapshot.draft).toBe('word @会话一 ')
-    // One caret gesture can remove more than one character; the deleted span
-    // is whatever the draft lost, never a fixed step.
-    textarea.setSelectionRange(5, 5)
-    act(() => {
-      beforeInput(textarea, 'deleteWordBackward')
-      fireEvent.change(textarea, { target: { value: '@会话一 ' } })
-    })
-    expect(shell.snapshot.draft).toBe('@会话一 ')
-    expect(shell.snapshot.occurrences).toHaveLength(1)
-    expect(shell.snapshot.occurrences[0]).toMatchObject({ offset: 0, length: 4 })
-  })
-
-  it('copy and cut expand a partial reference selection to its structured range', () => {
-    const { shell, textarea } = bench()
-    act(() => {
-      shell.setDraft('前 @w1 后')
-      shell.insertReference({
-        source: 'reference', ref: 'w1', label: '会话一', appearance: 'session', clipboardText: '@w1',
-      }, { start: 2, end: 5, draftRev: shell.snapshot.draftRev })
-    })
-    const setData = vi.fn()
-    textarea.setSelectionRange(3, 4)
-    fireEvent.copy(textarea, { clipboardData: { setData } })
-    expect(setData).toHaveBeenCalledWith('text/plain', '@w1')
-    expect(shell.snapshot.draft).toBe('前 @会话一 后')
-
-    textarea.setSelectionRange(3, 4)
-    fireEvent.cut(textarea, { clipboardData: { setData } })
-    expect(setData).toHaveBeenLastCalledWith('text/plain', '@w1')
-    expect(shell.snapshot).toMatchObject({ draft: '前  后', occurrences: [] })
+    expect(view.container.querySelector('[data-input-catcher]')).toBeNull()
   })
 
   it('a lexicon-matched plain token renders the text-ref mark', () => {
@@ -1365,33 +1374,6 @@ describe('decorations', () => {
     // Editing the token out of match shape drops the decoration.
     act(() => { shell.setDraft('use /fixture-dem now') })
     expect(view.container.querySelector('[data-decoration="text-ref"]')).toBeNull()
-  })
-
-  it('a directory completion renders a folder glyph without changing its plain text', () => {
-    const { view, shell } = bench()
-    act(() => { shell.setDraft('see @src/components/') })
-    const mark = view.container.querySelector('[data-decoration="text-ref"]')
-    expect(mark?.textContent).toBe('@src/components/')
-    expect(mark?.querySelector('svg')).not.toBeNull()
-    expect(shell.snapshot.draft).toBe('see @src/components/')
-  })
-
-  it('a plain-text reference keeps its nodes while earlier text shifts its offset', () => {
-    const { view, textarea, shell } = bench()
-    act(() => { shell.setDraft('see @src/components/ here') })
-    const backdrop = view.container.querySelector('[data-input-backdrop]')!
-    const mark = backdrop.querySelector('[data-decoration="text-ref"]')!
-    const icon = mark.querySelector('svg')!
-    act(() => { fireEvent.change(textarea, { target: { value: 'X see @src/components/ here' } }) })
-    // Node identity, not text: an offset-derived key remounts the mark and its
-    // icon on every keystroke landing ahead of the range.
-    expect(backdrop.querySelector('[data-decoration="text-ref"]')).toBe(mark)
-    expect(icon.isConnected).toBe(true)
-    expect(mark.textContent).toBe('@src/components/')
-    // A token edited out of match shape still loses its decoration.
-    act(() => { fireEvent.change(textarea, { target: { value: 'X see X@src/components/ here' } }) })
-    expect(backdrop.querySelector('[data-decoration="text-ref"]')).toBeNull()
-    expect(shell.snapshot.draft).toBe('X see X@src/components/ here')
   })
 })
 

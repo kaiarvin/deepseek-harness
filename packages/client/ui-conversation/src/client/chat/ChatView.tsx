@@ -19,6 +19,8 @@ import { Button, IconChevronDownOutline14, Modal } from '@deepseek-ai/dsh-client
 import type { ChatViewSlotProps, RenderMessageImages } from '../contract/slots.ts'
 import { PendingSteeringBubble } from './MessageItem.tsx'
 import { ChatNodeSeat } from './ChatNodeSeat.tsx'
+import type { ChatNode } from '../contract/chat-nodes.ts'
+import { QuestionMap, questionSnippet, type QuestionMapEntry } from './QuestionMap.tsx'
 import { formatRunDuration } from './message-chrome.ts'
 import css from './ChatView.module.css'
 
@@ -216,6 +218,20 @@ export function ChatView({
   )
   const runningTurnStart = useMemo(() => runningTurnStartTime(timeline), [timeline])
 
+  // One map bar per user question, in flow order; assistant, tool, context,
+  // and lifecycle nodes are not questions. Steering (a question admitted into
+  // a running turn) counts — it is a user turn-opening message too.
+  const questionEntries = useMemo(() => {
+    const entries: QuestionMapEntry[] = []
+    for (const key of order) {
+      const node = nodeStore.get(key) as ChatNode | undefined
+      if (node === undefined) continue
+      if (node.kind !== 'user' && node.kind !== 'steering') continue
+      entries.push({ key, snippet: questionSnippet(node.data.content, t('chat.map.imageOnly')) })
+    }
+    return entries
+  }, [nodeStore, order, t])
+
   const listRef = useRef<HTMLDivElement | null>(null)
   const columnRef = useRef<HTMLDivElement | null>(null)
   const atBottomRef = useRef(true)
@@ -396,6 +412,18 @@ export function ChatView({
     if (!loadingOlder) anchorRef.current = null
   }, [loadingOlder])
 
+  // The chat view wants the complete conversation, not just the tail window:
+  // the map and navigation need every question, so keep paging older in the
+  // background until nothing remains. The snapshot flip after each page re-arms
+  // this effect; the runtime's own in-flight guard makes the pump one page at
+  // a time, and each prepend rebuilds the map's entries over the full history.
+  const loadOlderRef = useRef(loadOlder)
+  loadOlderRef.current = loadOlder
+  useEffect(() => {
+    if (!hasMore || loadingOlder) return
+    loadOlderRef.current()
+  }, [hasMore, loadingOlder])
+
   const loadOlderAnchored = (): void => {
     const local = listRef.current
     /* v8 ignore next -- ref-null guard: the paging button renders inside the list tree. */
@@ -415,6 +443,7 @@ export function ChatView({
   return (
     <div className={css.root}>
       <div ref={listRef} className={css.scroll}>
+        <QuestionMap entries={questionEntries} listRef={listRef} />
         <div ref={columnRef} className={css.column} data-chat-flow="">
           {openState === 'loading' && <div className={css.hint}>{t('chat.loadingHistory')}</div>}
           {openState === 'error' && openError !== null && (

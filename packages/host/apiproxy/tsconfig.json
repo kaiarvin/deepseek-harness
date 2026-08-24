@@ -66,6 +66,9 @@
       "path": "../../session/session-title"
     },
     {
+      "path": "../../session/session-usage-report"
+    },
+    {
       "path": "../../session-query/session-query"
     },
     {

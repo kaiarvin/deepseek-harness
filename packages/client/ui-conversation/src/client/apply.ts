@@ -104,6 +104,33 @@ function concreteConversation(ctx: Context): ConversationController {
   return conversation
 }
 
+/**
+ * Carry the source blank session's draft and image attachments to the target
+ * session's input machine, clearing the source. Shared by the Workspace
+ * switch and the standalone New Session path (both move a New Session flow).
+ * @param inputHub - the per-session input machine registry.
+ * @param fromId - the session the draft currently lives in.
+ * @param toId - the session the flow lands in.
+ */
+function carryDraft(inputHub: InputHub, fromId: SessionId, toId: SessionId): void {
+  if (fromId === toId) return
+  const from = inputHub.shell(fromId)
+  const draft = from.snapshot.draft
+  const imageIds = from.snapshot.imageIds
+  const next = inputHub.shell(toId)
+  // Image carry is all-or-nothing: if the target refuses any, keep every
+  // image where it is (the draft text then stays too, so nothing splits).
+  if (imageIds.length === 0 || next.addImages(imageIds)) {
+    if (draft !== '') {
+      next.setDraft(draft)
+      from.setDraft('')
+    }
+    if (imageIds.length > 0) {
+      for (const id of imageIds) from.removeImage(id)
+    }
+  }
+}
+
 /** Chain routing: claim the composer while an approval wait is pending (pure — owner props only). */
 function selectApproval({ interactions }: ComposerChainProps): ApprovalWait | null {
   return interactions.find((i): i is ApprovalWait => i.kind === 'approval') ?? null
@@ -214,22 +241,16 @@ export function apply(ctx: Context): void {
       hooks: { composerBlock: sessionId === undefined ? ABSENT_BLOCK : composerBlocks.storeFor(sessionId) },
       selectWorkspace: async (workspaceId) => {
         const nextId = await workspaces.connectWorkspace(workspaceId)
-        if (sessionId !== undefined && nextId !== sessionId) {
-          const from = inputHub.shell(sessionId)
-          const draft = from.snapshot.draft
-          const imageIds = from.snapshot.imageIds
-          const next = inputHub.shell(nextId)
-          if (imageIds.length === 0 || next.addImages(imageIds)) {
-            if (draft !== '') {
-              next.setDraft(draft)
-              from.setDraft('')
-            }
-            if (imageIds.length > 0) {
-              for (const id of imageIds) from.removeImage(id)
-            }
-          }
-        }
+        if (sessionId !== undefined) carryDraft(inputHub, sessionId, nextId)
         sessions.open(nextId)
+      },
+      startStandalone: () => {
+        workspaces.connectStandalone().then((nextId) => {
+          if (sessionId !== undefined) carryDraft(inputHub, sessionId, nextId)
+          sessions.open(nextId)
+        }).catch((reason: unknown) => {
+          console.warn('standalone session failed:', reason)
+        })
       },
     }),
   }, ConversationRoot)
@@ -300,6 +321,7 @@ export function apply(ctx: Context): void {
           toggleCommandMenu: undefined,
           stop: undefined,
           command: undefined,
+          openFile: undefined,
           hooks: { notices: ABSENT_NOTICES, lexicon: ABSENT_LEXICON, menuLauncher: ABSENT_MENU_LAUNCHER },
         }
       }
@@ -354,6 +376,13 @@ export function apply(ctx: Context): void {
           if (session === undefined) return false
           const result = await session.command(line)
           return result.ok && result.value.matched
+        },
+        openFile: (path) => {
+          const cwd = sessions.list.getSnapshot().byId[sessionId]?.cwd
+          void workspaces.openPath(resolveWorkspacePath(cwd, path)).catch(() => {
+            // Host/OS open failures stay silent in the draft chip; the native
+            // app surfaces its own error dialog when the path is unusable.
+          })
         },
         hooks: {
           notices: shell.notices,

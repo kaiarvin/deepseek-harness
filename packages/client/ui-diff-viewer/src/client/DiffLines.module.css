@@ -1,0 +1,110 @@
+/* DiffLines: line-aligned diff body with per-file line numbers. Geometry
+   mirrors DiffBlock (code-block surface, no wrapping, horizontal scroll) with
+   the two number columns added; number cells are dim, fixed-width, and
+   right-aligned so the content column stays aligned across rows. */
+
+.block {
+  --dsl-diff-radius: 12px;
+  --dsl-diff-line-height: 22px;
+
+  position: relative;
+  margin: 16px 0;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-markdown-code-block);
+  border-radius: var(--dsl-diff-radius);
+}
+
+.copyButton {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  z-index: 1;
+  background-color: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  font: var(--dsw-font-xs-13);
+}
+
+.body {
+  padding: 12px 14px;
+  font: var(--dsw-font-markdown-code-block);
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* No wrapping, no word-break: a diff is read by its indentation. */
+.line {
+  min-height: var(--dsl-diff-line-height);
+  white-space: pre;
+  display: flex;
+}
+
+/* The two number columns share one width so both sides' content aligns; the
+   width covers the widest numbers this card typically shows (4 digits). */
+.oldNo,
+.newNo {
+  flex: none;
+  width: 3.2ch;
+  padding-right: 1ch;
+  text-align: right;
+  color: var(--dsw-alias-label-tertiary);
+  user-select: none;
+}
+
+/* The content column takes the remaining width and scrolls with the row. */
+.text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.path {
+  color: var(--dsw-alias-label-primary);
+  font-weight: 600;
+  padding-right: 56px;
+}
+
+/* The diff's meaning-carrying colors: removed on the error token, added on the
+   success token. A `- `/`+ ` prefix is drawn in the content column so a copied
+   line and the shown line agree, and the sign reads without color alone. */
+.del .text::before {
+  content: '- ';
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.del .text {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.add .text::before {
+  content: '+ ';
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.add .text {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.expand {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background-color: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.expand:hover {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.footer {
+  padding: 0 14px 12px;
+  font: var(--dsw-font-markdown-code-block);
+  color: var(--dsw-alias-label-tertiary);
+}

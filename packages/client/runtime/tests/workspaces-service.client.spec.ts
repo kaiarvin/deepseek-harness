@@ -295,6 +295,62 @@ describe('WorkspaceRuntime', () => {
     expect(api.callsOf('session.create')).toEqual([])
   })
 
+  it('connectStandalone reuses the loose blank session and creates otherwise, coalescing concurrent creates', async () => {
+    const ctx = new Context()
+    const api = new FakeApiClient()
+    const sessions = new SessionRuntime(ctx, api, fakeRemote())
+    const workspaces = new WorkspaceRuntime(ctx, api, sessions)
+    api.onWorkspaceList = () => Promise.resolve(ok({ items: [workspace('alpha', [sid('s-member')])] as never[] }))
+    api.onList = () => Promise.resolve(ok({
+      items: [
+        // Blank member of alpha: accounted, never the standalone reuse hit.
+        { sessionId: sid('s-member'), updatedAt: 1, running: false, blank: true, cwd: '/w/alpha' },
+        // Loose blank (a CLI session at the host cwd, or a prior standalone
+        // choice): the reuse hit — no create RPC.
+        { sessionId: sid('s-loose'), updatedAt: 2, running: false, blank: true, cwd: '/host/cwd' },
+        // Loose non-blank sibling: never reused.
+        { sessionId: sid('s-active'), updatedAt: 3, running: false, blank: false, cwd: '/host/cwd' },
+      ] as never[],
+    }))
+    await Promise.all([workspaces.refresh(), sessions.refresh()])
+    await Promise.resolve()
+
+    // Hit: the loose blank comes back without any create RPC.
+    await expect(workspaces.connectStandalone()).resolves.toBe('s-loose')
+    expect(api.callsOf('session.create')).toEqual([])
+    expect(sessions.binding(sid('s-loose'))).toBeDefined()
+
+    // The host archive-set is registry-global: model it as an accumulating
+    // set (the fake's per-call echo would clobber earlier archives).
+    const archived = new Set<SessionId>()
+    api.onWorkspaceArchiveSession = (payload: unknown) => {
+      archived.add((payload as { sessionId: SessionId }).sessionId)
+      return Promise.resolve(ok({ archivedSessionIds: [...archived] }))
+    }
+
+    // An archived loose blank is never reused: no grouping surface can show
+    // it, so New Session mints a fresh unaccounted one instead.
+    await workspaces.archiveSession(sid('s-loose'))
+    api.onCreate = () => Promise.resolve(ok({ sessionId: sid('s-fresh') }))
+    await expect(workspaces.connectStandalone()).resolves.toBe('s-fresh')
+    expect(api.callsOf('session.create')).toEqual([{}])
+
+    // Concurrent creates share one flight: the UI menu has no busy arm for
+    // this path, so a double gesture must not mint two stubs. With the fresh
+    // stub archived too, neither caller finds a reuse hit and both await the
+    // same in-flight create.
+    await workspaces.archiveSession(sid('s-fresh'))
+    const gate = deferred<Awaited<ReturnType<FakeApiClient['onCreate']>>>()
+    api.onCreate = () => gate.promise
+    const first = workspaces.connectStandalone()
+    const second = workspaces.connectStandalone()
+    gate.resolve(ok({ sessionId: sid('s-joined') }))
+    await expect(first).resolves.toBe('s-joined')
+    await expect(second).resolves.toBe('s-joined')
+    // Exactly one create for the pair (plus the earlier archived-stub create).
+    expect(api.callsOf('session.create')).toEqual([{}, {}])
+  })
+
   it('returns created Workspaces and preserves Host business errors', async () => {
     const ctx = new Context()
     const api = new FakeApiClient()

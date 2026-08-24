@@ -55,6 +55,8 @@ export class WorkspaceRuntime implements IWorkspaces {
   private readonly manager: WorkspaceManager
   /** In-flight blank-session creates keyed by workspace (connectWorkspace coalescing). */
   private readonly connecting = new Map<WorkspaceId, Promise<SessionId>>()
+  /** In-flight standalone blank-session create (connectStandalone coalescing). */
+  private standaloneConnecting: Promise<SessionId> | null = null
   /** Guards the runtime-owned one-shot initial-selection subscription. */
   private initialSelectionStarted = false
 
@@ -112,6 +114,34 @@ export class WorkspaceRuntime implements IWorkspaces {
     const attempt = this.sessions.create({ workspaceId })
       .finally(() => { this.connecting.delete(workspaceId) })
     this.connecting.set(workspaceId, attempt)
+    return attempt
+  }
+
+  /**
+   * Resolve the session a standalone (no Workspace) New Session lands in:
+   * reuse the first blank session not accounted to any Workspace — the
+   * loose blank is by definition a standalone stub — else create a fresh
+   * unaccounted one on the host (`session.create` with no workspace or cwd
+   * births the full Session+Agent at the Host default cwd). An archived
+   * blank is never reused: no grouping surface can show it, so New Session
+   * mints a fresh one instead. Concurrent calls share one create (the UI
+   * menu has no busy arm for this path, so a double gesture must not mint
+   * two stubs).
+   * @returns the reused or newly created session id.
+   */
+  async connectStandalone(): Promise<SessionId> {
+    const workspace = this.list.getSnapshot()
+    const accounted = new Set(workspace.items.flatMap(item => item.sessionIds))
+    const archived = workspace.archivedSessionIds
+    const sessions = this.sessions.list.getSnapshot()
+    for (const id of sessions.ids) {
+      const summary = sessions.byId[id]
+      if (summary !== undefined && summary.blank && !accounted.has(id) && !archived.includes(id)) return id
+    }
+    if (this.standaloneConnecting !== null) return this.standaloneConnecting
+    const attempt = this.sessions.create({})
+      .finally(() => { this.standaloneConnecting = null })
+    this.standaloneConnecting = attempt
     return attempt
   }
 

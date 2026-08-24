@@ -25,6 +25,7 @@ import type { ComposerBarProps } from '../contract/slots.ts'
 import { deriveDecorations } from '../input/decorations.ts'
 import type { DraftDecorations } from '../input/decorations.ts'
 import type { EditRange } from '../input/contract.ts'
+import { CELL_WIDTH_EM, MAX_CELLS } from '../input/machine.ts'
 import { attachmentErrorText, imageSizeText } from '../image-labels.ts'
 import { ReferenceIcon } from '../reference/ReferenceIcon.tsx'
 import { ContextMeter } from './ContextMeter.tsx'
@@ -74,6 +75,11 @@ function editRangeOf(pending: PendingEdit | null, prevLength: number, nextLength
   return undefined
 }
 
+/** Absolute filesystem spelling (the same rule the chat bubble's file links use). */
+function isAbsolutePath(path: string): boolean {
+  return path.startsWith('/') || /^[A-Za-z]:[\\/]/.test(path)
+}
+
 export type InputBarProps = ComposerBarProps
 
 export function InputBar({
@@ -81,7 +87,7 @@ export function InputBar({
   resolveSubmitMode, toggleCommandMenu, stop, command, t,
   renderSlot, useNotices, useLexicon, useMenuLauncher,
   useProjection, sessionId, variant, disabled: inert = false, blocked,
-  workspacePickerOpen = false, onRequestWorkspace,
+  workspacePickerOpen = false, onRequestWorkspace, openFile,
   placeholder, accessory, overlay, leftItems, rightItems, footer,
 }: InputBarProps) {
   const input = useInput(s => s)
@@ -458,7 +464,7 @@ export function InputBar({
     e.preventDefault()
     const copyStart = touched.reduce((value, o) => Math.min(value, o.offset), start)
     const copyEnd = touched.reduce((value, o) => Math.max(value, o.offset + o.length), end)
-    // Expand structured ranges to their owner clipboard projections.
+    // Expand placeholder runs to their owner clipboard projections.
     let text = ''
     let cursor = copyStart
     for (const o of touched) {
@@ -584,7 +590,12 @@ export function InputBar({
   // text. Claim tokens and references retain the draft's own glyph metrics,
   // so their decoration cannot drift from wrapping, selection, or the caret.
   const deco = input === undefined ? INERT_DECORATIONS : deriveDecorations(input, lexicon)
-  const backdrop: ReactNode[] = []
+  type BackdropSegment =
+    | { kind: 'text'; text: string }
+    | { kind: 'token'; text: string }
+    | { kind: 'chip'; chip: (typeof deco.chips)[number] }
+    | { kind: 'ref'; text: string; appearance?: 'folder' }
+  const segments: BackdropSegment[] = []
   {
     // Segment boundaries: the token range end, every structured-reference
     // offset, and every text-ref range — merged in draft order (the sources never
@@ -592,15 +603,11 @@ export function InputBar({
     // claim token only leads).
     let cursor = 0
     const pushPlain = (upTo: number): void => {
-      if (upTo > cursor) backdrop.push(draft.slice(cursor, upTo))
+      if (upTo > cursor) segments.push({ kind: 'text', text: draft.slice(cursor, upTo) })
       cursor = upTo
     }
     if (deco.token !== null) {
-      backdrop.push(
-        <mark key="token" className={css.hlToken} data-decoration="token">
-          {draft.slice(deco.token.start, deco.token.end)}
-        </mark>,
-      )
+      segments.push({ kind: 'token', text: draft.slice(deco.token.start, deco.token.end) })
       cursor = deco.token.end
     }
     type Boundary =
@@ -614,41 +621,54 @@ export function InputBar({
       if (b.at < cursor) continue // claim-token overlap: the leading mark wins
       pushPlain(b.at)
       if (b.kind === 'chip') {
-        const chip = b.chip
+        segments.push({ kind: 'chip', chip: b.chip })
+        cursor = b.chip.offset + b.chip.length // the placeholder run the chip stands for
+      } else {
+        segments.push({
+          kind: 'ref',
+          text: draft.slice(b.ref.start, b.ref.end),
+          ...b.ref.appearance === undefined ? {} : { appearance: b.ref.appearance },
+        })
+        cursor = b.ref.end
+      }
+    }
+    pushPlain(draft.length)
+  }
+  const backdrop: ReactNode[] = []
+  {
+    for (const segment of segments) {
+      if (segment.kind === 'text') backdrop.push(segment.text)
+      else if (segment.kind === 'token') {
+        backdrop.push(<mark key="token" className={css.hlToken} data-decoration="token">{segment.text}</mark>)
+      } else if (segment.kind === 'chip') {
+        const chip = segment.chip
         backdrop.push(
+          // The cell's ::before renders U+FFFC itself so its advance equals the
+          // textarea's placeholder exactly (same char, same font); the pill is
+          // an overlay that never affects layout. The chip spans `length` 4em
+          // cells, so the flow advance stays an exact multiple of one
+          // placeholder char — the two layers cannot drift.
           <span
             key={`chip-${chip.occurrenceId}`}
             className={clsx(css.chip, chip.invalid && css.chipInvalid)}
+            style={{ width: `${chip.length * CELL_WIDTH_EM}em` }}
             data-decoration="chip"
-            data-reference-appearance={chip.appearance}
             data-occurrence={chip.occurrenceId}
             data-invalid={chip.invalid || undefined}
             title={chip.label}
           >
-            {chip.appearance === undefined
-              ? chip.text[0]
-              : (
-                <span className={css.chipTrigger}>
-                  <span className={css.chipTriggerGlyph}>{chip.text[0]}</span>
-                  <ReferenceIcon kind={chip.appearance} size={16} className={css.chipIcon} />
-                </span>
-              )}
-            <span>{chip.text.slice(1)}</span>
+            <span className={css.chipPill} data-chip-pill>
+              <span className={css.chipLabel} data-chip-label>{chip.label}</span>
+            </span>
           </span>,
         )
-        cursor = chip.offset + chip.length
       } else {
         // Plain-range highlight: the glyphs stay the
         // textarea's (advance untouched); the mark paints the chip look.
-        // The key is the draft-order ordinal: a fresh scan derives these
-        // ranges every render, so none of them carries identity past its
-        // position, and a draft-offset key would unmount the mark and its
-        // icon for every character typed ahead of it. Structured references
-        // key by occurrenceId, the identity their occurrence table owns.
-        const text = draft.slice(b.ref.start, b.ref.end)
+        const text = segment.text
         backdrop.push(
-          <mark key={`ref-${b.ordinal}`} className={css.textRef} data-decoration="text-ref">
-            {b.ref.appearance === 'folder'
+          <mark key={`ref-${text}`} className={css.textRef} data-decoration="text-ref">
+            {segment.appearance === 'folder'
               ? (
                 <>
                   <span className={css.textRefTrigger}>
@@ -661,10 +681,8 @@ export function InputBar({
               : text}
           </mark>,
         )
-        cursor = b.ref.end
       }
     }
-    pushPlain(draft.length)
     if (deco.hint !== null) {
       // Claim tokens have the `/name ` format (trailing space); trim to the bare name.
       const commandName = input?.claim?.token.slice(1).trim() ?? ''
@@ -676,6 +694,79 @@ export function InputBar({
       backdrop.push(<span key="hint" className={css.hint} data-decoration="hint">{displayHint}</span>)
     }
   }
+  // The click-catcher layer above the textarea: the same draft flow, invisible,
+  // with one real button per absolute-path chip. Clicking a pill opens its file
+  // through the Host opener (the composer analogue of the chat bubble's file
+  // link). Non-path chips render a width-only cell instead, so clicks on them
+  // keep the textarea's caret behavior. Absent without a Host opener or any
+  // openable chip; opening a file is a read-only Host action, so the buttons
+  // stay live even while the composer is locked or busy.
+  const catcher: ReactNode[] = openFile !== undefined && deco.chips.some(chip => isAbsolutePath(chip.ref))
+    ? segments.map((segment, index) => {
+      if (segment.kind !== 'chip') {
+        return <span key={`catch-text-${index}`} aria-hidden>{segment.text}</span>
+      }
+      const chip = segment.chip
+      if (!isAbsolutePath(chip.ref)) {
+        return (
+          <span key={`catch-cell-${chip.occurrenceId}`} aria-hidden className={css.catcherCell}
+            style={{ width: `${chip.length * CELL_WIDTH_EM}em` }} />
+        )
+      }
+      return (
+        <button
+          key={`catch-${chip.occurrenceId}`}
+          type="button"
+          className={css.catcherChip}
+          style={{ width: `${chip.length * CELL_WIDTH_EM}em` }}
+          aria-label={chip.label}
+          title={chip.label}
+          onMouseDown={(e) => { e.preventDefault() }} // keep the composer focused
+          onClick={() => { openFile(chip.ref) }}
+        />
+      )
+    })
+    : []
+
+  // Chip-cell correction: the machine sizes each chip's placeholder run from
+  // a text estimate at insert time; the rendered pill must never clip the
+  // label, so after paint we measure each pill's natural width and resize the
+  // run to the exact fit — BOTH ways (an over-estimate shrinks too: the pill
+  // visually hugs the label, but a too-wide run leaves a visible gap before
+  // the next glyph). Measuring at max-content frees the pill from its cell-span
+  // clamp, so a label that fits never reports the clamp as its width (a
+  // constrained scrollWidth cannot detect an over-size). The machine guards
+  // phase and bounds, so a rejected resize is terminal (no state change, no
+  // re-render, no retry loop). jsdom reports no layout (scrollWidth 0): the
+  // estimate stands untouched in tests.
+  useLayoutEffect(() => {
+    if (keyboard === undefined || deco.chips.length === 0) return
+    const scrollEl = scrollRef.current
+    if (scrollEl === null) return
+    for (const chipEl of scrollEl.querySelectorAll<HTMLElement>('[data-decoration="chip"]')) {
+      const occurrenceId = Number(chipEl.dataset.occurrence)
+      const pillEl = chipEl.querySelector<HTMLElement>('[data-chip-pill]')
+      const length = deco.chips.find(chip => chip.occurrenceId === occurrenceId)?.length
+      if (!Number.isInteger(occurrenceId) || pillEl === null || length === undefined) continue
+      // Temporarily free the pill from its cell-span clamp (a layout effect:
+      // the restore lands before paint, so nothing flickers).
+      const previousWidth = pillEl.style.width
+      pillEl.style.width = 'max-content'
+      const natural = pillEl.scrollWidth
+      pillEl.style.width = previousWidth
+      if (natural <= 0) continue // no layout (jsdom) — the estimate stands
+      // Computed font-size is px in browsers; jsdom reports the CSS keyword
+      // ('medium' = 16px), so non-px sizes fall back to the spec default.
+      const rawFontSize = getComputedStyle(chipEl).fontSize
+      const fontSize = rawFontSize.endsWith('px') ? parseFloat(rawFontSize) : 16
+      if (!Number.isFinite(fontSize) || fontSize <= 0) continue
+      // The pill's max-content width already carries its padding; scaling by
+      // 0.72 gives the visual width, which must fit the `cells`×4em span.
+      const needed = Math.min(MAX_CELLS,
+        Math.ceil(natural * 0.72 / (CELL_WIDTH_EM * fontSize)))
+      if (needed !== length) keyboard.resizeChip(occurrenceId, needed)
+    }
+  }, [keyboard, deco])
 
   return (
     <div className={clsx(css.root, variant === 'hero' && css.hero)}>
@@ -764,6 +855,9 @@ export function InputBar({
               onCompositionStart={onCompositionStart}
               onCompositionEnd={onCompositionEnd}
             />
+            {catcher.length > 0 && (
+              <div className={css.catcher} data-input-catcher>{catcher}</div>
+            )}
             <div ref={mirrorRef} aria-hidden className={css.mirror} data-input-mirror>{`${draft}\n`}</div>
           </div>
         </div>

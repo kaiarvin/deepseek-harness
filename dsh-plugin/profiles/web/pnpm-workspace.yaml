@@ -1,0 +1,14 @@
+packages:
+  - .
+
+nodeLinker: hoisted
+autoInstallPeers: false
+allowBuilds:
+  node-pty: true
+  protobufjs: true
+minimumReleaseAgeExclude:
+  - '@ruihuahe/dsh-plugin-marketplace@0.1.0'
+  - dsh-better-sidebar
+  # GitHub release tarball, not published to the npm registry, so the
+  # supply-chain policy cannot check its release date.
+  - dsh-skill-mcp-panel

@@ -113,16 +113,16 @@ describe('hand-declared providers', () => {
     })
   })
 
-  it('offers no reasoning control it could not honour', async () => {
+  it('defaults a hand-declared model to the off / high / max thinking offer', async () => {
     const server = await mockServer([])
     const ctx = await harness(gateway(`${server.url}/v1`))
 
-    // pi-ai reports a model with no reasoning metadata as supporting the single
-    // level `off`, but `off` is translated to *omitting* the reasoning option —
-    // byte-for-byte the same request as naming no effort — so a provider whose
-    // own default is to think would keep thinking with `off` selected. The
-    // capability is reported unavailable instead of offering that control.
-    expect((await ctx.llm.resolveModelInfo('acme-gateway', 'acme-large')).reasoning).toBeUndefined()
+    // A hand-declared model (one the installed catalog does not describe)
+    // gets the same off / high / max offer the shipped DeepSeek models carry,
+    // so a custom model reaches the thinking selector out of the box and its
+    // wire spellings dispatch without a profile.
+    expect((await ctx.llm.resolveModelInfo('acme-gateway', 'acme-large')).reasoning?.efforts.map(e => e.id))
+      .toEqual(['off', 'high', 'max'])
 
     // A catalog route is unaffected: its models carry the metadata that makes
     // `off` actually disable thinking.
@@ -668,6 +668,31 @@ describe('per-model reasoning efforts', () => {
 
     expect(model.reasoning).toBe(catalogModel.reasoning)
     expect(model.thinkingLevelMap).toEqual(catalogModel.thinkingLevelMap)
+  })
+
+  it('defaults a hand-declared model with no declaration to the off / high / max offer', () => {
+    const model = modelOf(declared([{ id: 'acme-plain' }]))
+
+    // The installed catalog does not describe the model, so the fallback is
+    // the shipped-DeepSeek offer rather than "does not reason": a custom model
+    // reasons out of the box, with `off` absent from the map (supported, send
+    // nothing) and the remaining levels pinned like a declaration would.
+    expect(model.reasoning).toBe(true)
+    expect(model.thinkingLevelMap).toEqual({
+      minimal: null,
+      low: null,
+      medium: null,
+      high: 'high',
+      xhigh: null,
+      max: 'max',
+    })
+    expect(getSupportedThinkingLevels(model)).toEqual(['off', 'high', 'max'])
+  })
+
+  it('keeps a hand-declared model non-reasoning when the profile says false', () => {
+    const model = modelOf(declared([{ id: 'acme-plain', reasoningEfforts: false }]))
+    expect(model.reasoning).toBe(false)
+    expect(getSupportedThinkingLevels(model)).toEqual(['off'])
   })
 
   it('rejects a declaration that offers nothing or spells a level it cannot send', () => {

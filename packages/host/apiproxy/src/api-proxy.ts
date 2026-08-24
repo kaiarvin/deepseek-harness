@@ -81,6 +81,8 @@ import type {} from '@deepseek-ai/dsh-skill'
 // provider still serves every other domain.
 import { SettingsConflictError, settingsNamespace } from '@deepseek-ai/dsh-settings'
 import type { SettingsDescriptor, SettingsNamespace, SettingsPathOp } from '@deepseek-ai/dsh-settings'
+// Type-only edge: resolves `ctx.get('sessionUsage')` to the report service.
+import type {} from '@deepseek-ai/dsh-session-usage-report'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
 // Value edge: the rename impl narrows the title service's validation failure; the import also resolves `ctx.get('sessionTitle')`.
 import { SessionTitleInvalidError } from '@deepseek-ai/dsh-session-title'
@@ -3214,6 +3216,36 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
       update: request => settingsWrite(request, request.payload.ns, 'update', request.payload.patch, request.payload.expectedRevision),
       replace: request => settingsWrite(request, request.payload.ns, 'replace', request.payload.section, request.payload.expectedRevision),
       mutate: request => settingsWrite(request, request.payload.ns, 'mutate', request.payload.ops, request.payload.expectedRevision),
+    },
+
+    usage: {
+      async report(request, signal) {
+        const usage = ctx.get('sessionUsage')
+        if (usage === undefined) {
+          return err(request, {
+            code: 'internal',
+            message: 'usage report is unavailable: this deployment mounts no session-usage-report service',
+            details: {},
+          })
+        }
+        try {
+          const report = await usage.report(request.payload, signal)
+          return ok(request, report)
+        } catch (error: unknown) {
+          if (isAborted(signal)) {
+            return err(request, {
+              code: 'cancelled',
+              message: 'usage report was aborted',
+              details: {},
+            })
+          }
+          return err(request, {
+            code: 'internal',
+            message: `usage report failed: ${error instanceof Error ? error.message : String(error)}`,
+            details: {},
+          })
+        }
+      },
     },
 
     credentials: {

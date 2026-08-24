@@ -140,6 +140,7 @@ function mount(
   const inputActions = wiring.actions
   const stop = vi.fn()
   const open = vi.fn()
+  const startStandaloneSpy = vi.fn()
   const slotCalls: string[] = []
   const lineageOwners: ConversationHeaderLineageOwnerProps[] = []
   const viewTabs = options.viewTabs ?? [
@@ -229,6 +230,7 @@ function mount(
           useMenuLauncher={bindSnapshotSelector(createSnapshotStore<string | null>(null))}
           stop={stop}
           command={() => Promise.resolve(true)}
+          openFile={undefined}
           t={t}
           renderSlot={((key: string, seatOwner: object) => {
             // The bar's own seats: recorded so a case can assert what share
@@ -267,11 +269,12 @@ function mount(
     renderSlot,
     renderSlotChain,
     selectWorkspace: retargetWorkspace,
+    startStandalone: startStandaloneSpy,
     t,
   }
   const view = render(<ConversationRoot {...props} />)
   return {
-    view, chat, sink, retargetWorkspace, session, slotCalls, lineageOwners, seatOwners, open,
+    view, chat, sink, retargetWorkspace, startStandaloneSpy, session, slotCalls, lineageOwners, seatOwners, open,
     pickerOwner: () => pickerOwner,
     rerender: () => { view.rerender(<ConversationRoot {...props} />) },
   }
@@ -316,20 +319,45 @@ describe('ConversationRoot resident composer', () => {
     expect(seat('conversation.input.plan')).toEqual({ locked: true })
   })
 
-  it('lets the no-workspace posture win over a block', () => {
-    // Picking a workspace is the earlier prerequisite; naming a model first
-    // would send the user somewhere they cannot act yet.
+  it('an ungrouped blank session is a usable standalone session', () => {
+    // A blank session in no Workspace is a legitimate standalone session
+    // (the "work without a project" choice), not an unfinished pick: the
+    // composer stays live and the chip labels the Ungrouped bucket.
     const b = mount(conversationSnapshot({ composerPhase: 'blank' }), [], undefined, {
+      summaryBlank: true,
+    })
+    expect(b.view.getByText('未分组')).toBeTruthy()
+    const box = b.view.getByRole('textbox') as HTMLTextAreaElement
+    expect(box.disabled).toBe(false)
+    expect(box.readOnly).toBe(false)
+    // The read-only workspace trigger affordance belongs to the inert
+    // no-session posture only — a standalone session has no trigger.
+    expect(box.getAttribute('aria-haspopup')).toBeNull()
+    expect(box.placeholder).not.toBe('选择一个工作区开始')
+  })
+
+  it('a block wins over an ungrouped blank session, like any other session', () => {
+    // The inert no-workspace posture only exists before a session is chosen;
+    // once one exists (grouped or not), a raised block applies as usual.
+    const blocked = mount(conversationSnapshot({ composerPhase: 'blank' }), [], undefined, {
       summaryBlank: true,
       composerBlock: { reason: 'select a model first' },
     })
-    const box = b.view.getByRole('textbox') as HTMLTextAreaElement
-    expect(box.disabled).toBe(false)
-    expect(box.readOnly).toBe(true)
-    expect(box.getAttribute('aria-haspopup')).toBe('menu')
-    expect(box.placeholder).not.toBe('select a model first')
-    const modelSeat = b.seatOwners.filter(call => call.key === 'conversation.input.model').at(-1)?.owner
-    expect(modelSeat).toEqual({ locked: true })
+    const blockedBox = blocked.view.getByRole('textbox') as HTMLTextAreaElement
+    expect(blockedBox.disabled).toBe(true)
+    expect(blockedBox.placeholder).toBe('select a model first')
+    const modelSeat = blocked.seatOwners.filter(call => call.key === 'conversation.input.model').at(-1)?.owner
+    expect(modelSeat).toEqual({ locked: false })
+  })
+
+  it('routes the standalone choice to the injected startStandalone action', () => {
+    const b = mount(conversationSnapshot({ composerPhase: 'blank', blank: true }))
+    // Open the picker through the chip, then choose the escape hatch.
+    fireEvent.click(b.view.getByRole('button', { name: '选择工作区' }))
+    const owner = b.pickerOwner() as { open: boolean; onStandalone(): void }
+    expect(owner.open).toBe(true)
+    act(() => { owner.onStandalone() })
+    expect(b.startStandaloneSpy).toHaveBeenCalledTimes(1)
   })
 
   it('keeps composer text in the machine, mirrors to the chat store, and submits through the sink', () => {

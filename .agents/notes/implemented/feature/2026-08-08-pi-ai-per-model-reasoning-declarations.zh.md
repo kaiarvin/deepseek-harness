@@ -27,7 +27,7 @@ Status: implemented
 
 ## 后果
 
-- 输入框的档位面板对手工声明的模型直接可用，UI 零改动——`resolveModelInfo` 经 catalog 元数据所走的同一 seam 报告已声明档位（由 `declared-reasoning` web 场景钉住）。
+- 输入框的档位面板对手工声明的模型直接可用，UI 零改动——`resolveModelInfo` 经 catalog 元数据所走的同一 seam 报告已声明档位（由 `declared-reasoning` web 场景钉住）。未声明 `reasoningEfforts` 的手工声明模型现在默认获得 off / high / max 三档，而非完全不推理（[[2026-08-18-hand-declared-default-thinking-offer]]），因此对它而言「不推理」的回退已不存在；`false` 与声明的 dict 仍可塑形档位。
 - #1860 暂缓的缺口——模型接不住的路由级档位会让发往它的请求失败——如今有了运维侧补救：对齐该模型的 `reasoningEfforts`，或去掉路由默认值。
 - 刻意不提供任何把单个 map 键或 compat 字段交还给「catalog 原本怎么说」的拼写：这份声明就是对外提供的全部，要保留某个 catalog 值就得重述它。README 记载了这一点。
 - `verify-package-invariants` 原封未动：该功能新增的是配置解析，没有新事件，也没有可变的运行时关系。

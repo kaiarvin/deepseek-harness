@@ -14,7 +14,7 @@ export type ConversationRootProps = ConversationSlotProps
 
 export function ConversationRoot({
   sessionId, useSession, useSessions, useWorkspaces, useInput, useComposerBlock,
-  renderSlot, renderSlotChain, selectWorkspace, t,
+  renderSlot, renderSlotChain, selectWorkspace, startStandalone, t,
 }: ConversationRootProps) {
   const openState = useSession(s => s.openState)
   const composerPhase = useSession(s => s.composerPhase)
@@ -87,15 +87,18 @@ export function ConversationRoot({
   //   3. the blank session's workspace is in the list → its title;
   //   4. list still loading → cwd folder name bridges so the title does not
   //      flash on refresh (empty cwd → placeholder);
-  //   5. list ready but no owning workspace (deleted from the sidebar) →
-  //      placeholder, never the deleted folder's name via cwd.
+  //   5. list ready but no owning workspace (standalone session, or one whose
+  //      workspace was deleted from the sidebar) → the Ungrouped label —
+  //      never the deleted folder's name via cwd.
   const chipTitle = pendingWorkspace?.title
     ?? (sessionId === undefined
       ? undefined
       : sessionWorkspace?.title
-        ?? (workspaces.phase === 'ready' || cwd === undefined || cwd === ''
-          ? undefined
-          : workspaceLabel(cwd)))
+        ?? (workspaces.phase === 'ready'
+          ? t('hero.ungrouped')
+          : cwd === undefined || cwd === ''
+            ? undefined
+            : workspaceLabel(cwd)))
 
   const heroWorkspaceRow = (
     <div className={css.heroWorkspaceRow}>
@@ -116,6 +119,10 @@ export function ConversationRoot({
           void selectWorkspace(workspaceId).catch(() => {
             setPendingWorkspaceId(current => current === workspaceId ? undefined : current)
           })
+        },
+        onStandalone: () => {
+          setPickerOpen(false)
+          startStandalone()
         },
         onClose: () => { setPickerOpen(false) },
       })}

@@ -168,9 +168,10 @@ function resolveReasoningLevel(
 /**
  * Selectable reasoning efforts for one model, or nothing at all.
  *
- * A model that carries no reasoning metadata — every hand-declared one, and
- * every catalog model pi-ai marks as non-reasoning — is reported by pi-ai as
- * supporting the single level `off`. Passing that through would offer a control
+ * A model that carries no reasoning metadata — a catalog model pi-ai marks as
+ * non-reasoning (a hand-declared one now defaults to the off / high / max
+ * offer instead) — is reported by pi-ai as supporting the single level `off`.
+ * Passing that through would offer a control
  * that cannot do what it says: `off` is translated to *omitting* the reasoning
  * option, which for such a model is byte-for-byte the same request as naming no
  * effort — so a provider whose own default is to think would keep thinking with

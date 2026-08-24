@@ -1,0 +1,9 @@
+# dsh-file-drop-inbox bundle patch
+#
+# The `dsh.bundle.patch` layer of this package: when the plugin is installed
+# (dsh plugin add, or a manual entry in dsh.profile.bundles), this single
+# insert mounts the host half and the client bundle is served automatically
+# from the dsh.client declaration in package.json.
+- insert:
+    - id: file-drop-inbox
+      name: 'dsh-file-drop-inbox'

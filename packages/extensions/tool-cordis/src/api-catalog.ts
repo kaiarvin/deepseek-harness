@@ -3339,7 +3339,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'FileDiff',
-    declaration: 'export interface FileDiff {\n    path: string;\n    oldText: string | null;\n    newText: string;\n}',
+    declaration: 'export interface FileDiff {\n    path: string;\n    oldText: string | null;\n    newText: string;\n    oldStart?: number;\n    newStart?: number;\n}',
   },
   {
     name: 'FileLocation',

@@ -1,0 +1,22 @@
+{
+  "name": "dsh-profile-web",
+  "private": true,
+  "dependencies": {
+    "auto-compact": "^1.2.0",
+    "dsh-better-sidebar": "^0.12.1",
+    "dsh-file-drop-inbox": "file:./file-drop-inbox",
+    "dsh-skill-mcp-panel": "https://github.com/Fishquito7/dsh-skill-mcp-panel/releases/download/v2.0.1/dsh-skill-mcp-panel-2.0.1.tgz"
+  },
+  "dsh": {
+    "profile": {
+      "bundles": [
+        "@deepseek-ai/dsh-base",
+        "@deepseek-ai/dsh-web-app",
+        "auto-compact",
+        "dsh-better-sidebar",
+        "dsh-skill-mcp-panel",
+        "dsh-file-drop-inbox"
+      ]
+    }
+  }
+}

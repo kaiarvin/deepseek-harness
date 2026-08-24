@@ -47,8 +47,8 @@ function state(overrides: Partial<ModelDirectoryState> = {}): ModelDirectoryStat
 
 afterEach(cleanup)
 
-describe('ModelSelect reasoning effort', () => {
-  it('renders adapter metadata and submits the effort as part of the session selection', async () => {
+describe('ModelSelect model list', () => {
+  it('opens straight into the model list with no reasoning effort surface', async () => {
     const directory = createSnapshotStore<ModelDirectoryState>(state())
     const select = vi.fn(async (selection: ModelSelection) => {
       directory.set(state({ current: selection }))
@@ -63,53 +63,15 @@ describe('ModelSelect reasoning effort', () => {
       t={t}
     />)
 
+    // The trigger carries only the model name; the effort level lives in the
+    // sibling ThinkingSelect chip.
     const trigger = screen.getByRole('button', {
-      name: '选择模型，当前 DeepSeek-V4-Flash，推理等级 High',
+      name: '选择模型，当前 DeepSeek-V4-Flash',
     })
     fireEvent.click(trigger)
-    fireEvent.click(screen.getByRole('menuitem', { name: /推理等级/ }))
+    expect(screen.queryByRole('menuitem', { name: /推理等级/ })).toBeNull()
     expect(screen.getAllByRole('menuitemradio').map(item => item.textContent))
-      .toEqual(['Off', 'High', 'MaxLargest budget'])
-
-    fireEvent.click(screen.getByRole('menuitemradio', { name: /Max/ }))
-    await waitFor(() => {
-      expect(select).toHaveBeenCalledWith({
-        provider: 'deepseek-official',
-        model: 'deepseek-v4-flash',
-        reasoningEffort: 'max',
-      })
-      expect(trigger.getAttribute('aria-label')).toBe('选择模型，当前 DeepSeek-V4-Flash，推理等级 Max')
-    })
-  })
-
-  it('offers provider default only when the adapter does not configure a model default', () => {
-    const directory = createSnapshotStore(state({
-      groups: [{
-        id: 'provider',
-        name: 'Provider',
-        models: [{
-          id: 'model',
-          name: 'Model',
-          reasoning: { efforts: [{ id: 'standard', name: 'Standard' }] },
-        }],
-      }],
-      current: { provider: 'provider', model: 'model' },
-    }))
-    render(<ModelSelect
-      locked={false}
-      available
-      directory={directory}
-      load={vi.fn()}
-      select={vi.fn().mockResolvedValue(true)}
-      t={t}
-    />)
-
-    fireEvent.click(screen.getByRole('button', {
-      name: '选择模型，当前 Model，推理等级 Default',
-    }))
-    fireEvent.click(screen.getByRole('menuitem', { name: /推理等级/ }))
-    expect(screen.getAllByRole('menuitemradio').map(item => item.textContent))
-      .toEqual(['Default', 'Standard'])
+      .toEqual(['DeepSeek-V4-Flash'])
   })
 
   it('prompts for a selection when the current model is no longer advertised', () => {
@@ -129,8 +91,6 @@ describe('ModelSelect reasoning effort', () => {
     const trigger = screen.getByRole('button', { name: '选择模型' })
     expect(trigger.textContent).toContain('选择模型')
     fireEvent.click(trigger)
-    expect(screen.queryByRole('menuitem', { name: /推理等级/ })).toBeNull()
-    fireEvent.click(screen.getByRole('menuitem', { name: /模型/ }))
     expect(screen.queryByText('removed-model')).toBeNull()
     expect(screen.getByRole('menuitemradio', { name: 'DeepSeek-V4-Flash' })).toBeTruthy()
   })
@@ -158,8 +118,7 @@ describe('ModelSelect reasoning effort', () => {
       t={t}
     />)
 
-    fireEvent.click(screen.getByRole('button', { name: /选择模型|当前/ }))
-    fireEvent.click(screen.getByRole('menuitem', { name: /模型/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^选择模型，当前/ }))
     fireEvent.click(screen.getByRole('menuitemradio', { name: /DeepSeek-V4-Pro/ }))
     const toast = await screen.findByRole('alert')
     expect(toast.textContent).toContain('模型操作失败：model-unavailable: session already contains images')
@@ -180,5 +139,161 @@ describe('ModelSelect reasoning effort', () => {
 
     expect(screen.queryByRole('button')).toBeNull()
     expect(load).not.toHaveBeenCalled()
+  })
+})
+
+describe('ThinkingSelect quick thinking level', () => {
+  const selectState = (selection: ModelSelection) =>
+    state({ current: selection })
+
+  it('sits next to the model chip with the three fixed levels and submits the effort', async () => {
+    const directory = createSnapshotStore<ModelDirectoryState>(state())
+    const select = vi.fn(async (selection: ModelSelection) => {
+      directory.set(selectState(selection))
+      return true
+    })
+    render(<ModelSelect
+      locked={false}
+      available
+      directory={directory}
+      load={vi.fn()}
+      select={select}
+      t={t}
+    />)
+
+    // Default effort high -> the trigger reads 高.
+    const trigger = screen.getByRole('button', { name: '思考级别，当前 高' })
+    fireEvent.click(trigger)
+    expect(screen.getAllByRole('menuitemradio').map(item => item.textContent))
+      .toEqual(['关闭', '高', '最高'])
+    expect(screen.getByRole('menuitemradio', { name: '高' }).getAttribute('aria-checked')).toBe('true')
+
+    fireEvent.click(screen.getByRole('menuitemradio', { name: '最高' }))
+    await waitFor(() => {
+      expect(select).toHaveBeenCalledWith({
+        provider: 'deepseek-official',
+        model: 'deepseek-v4-flash',
+        reasoningEffort: 'max',
+      })
+      expect(screen.getByRole('button', { name: '思考级别，当前 最高' })).toBeTruthy()
+    })
+  })
+
+  it('shows only the offered subset of the fixed levels', () => {
+    const directory = createSnapshotStore(state({
+      groups: [{
+        id: 'deepseek-official',
+        name: 'DeepSeek',
+        models: [{
+          id: 'deepseek-v4-flash',
+          name: 'DeepSeek-V4-Flash',
+          reasoning: { efforts: [
+            { id: 'off', name: 'Off' },
+            { id: 'high', name: 'High' },
+          ], defaultEffort: 'high' },
+        }],
+      }],
+    }))
+    render(<ModelSelect
+      locked={false}
+      available
+      directory={directory}
+      load={vi.fn()}
+      select={vi.fn().mockResolvedValue(true)}
+      t={t}
+    />)
+
+    fireEvent.click(screen.getByRole('button', { name: '思考级别，当前 高' }))
+    expect(screen.getAllByRole('menuitemradio').map(item => item.textContent)).toEqual(['关闭', '高'])
+  })
+
+  it('stays hidden when the current model offers none of the fixed levels', () => {
+    const directory = createSnapshotStore(state({
+      groups: [{
+        id: 'provider',
+        name: 'Provider',
+        models: [{
+          id: 'model',
+          name: 'Model',
+          reasoning: { efforts: [{ id: 'standard', name: 'Standard' }] },
+        }],
+      }],
+      current: { provider: 'provider', model: 'model' },
+    }))
+    render(<ModelSelect
+      locked={false}
+      available
+      directory={directory}
+      load={vi.fn()}
+      select={vi.fn().mockResolvedValue(true)}
+      t={t}
+    />)
+
+    expect(screen.queryByRole('button', { name: /思考级别/ })).toBeNull()
+  })
+
+  it('stays hidden before any model selection resolves', () => {
+    const directory = createSnapshotStore<ModelDirectoryState>(state({ current: null }))
+    render(<ModelSelect
+      locked={false}
+      available
+      directory={directory}
+      load={vi.fn()}
+      select={vi.fn().mockResolvedValue(true)}
+      t={t}
+    />)
+
+    expect(screen.queryByRole('button', { name: /思考级别/ })).toBeNull()
+  })
+
+  it('disables the trigger while the model seat is locked', () => {
+    render(<ModelSelect
+      locked
+      available
+      directory={createSnapshotStore(state())}
+      load={vi.fn()}
+      select={vi.fn().mockResolvedValue(true)}
+      t={t}
+    />)
+
+    expect(screen.getByRole('button', { name: '思考级别，当前 高' }).getAttribute('disabled')).not.toBeNull()
+  })
+
+  it('closes the menu on Escape and leaves the model chip untouched', () => {
+    render(<ModelSelect
+      locked={false}
+      available
+      directory={createSnapshotStore(state())}
+      load={vi.fn()}
+      select={vi.fn().mockResolvedValue(true)}
+      t={t}
+    />)
+
+    const trigger = screen.getByRole('button', { name: '思考级别，当前 高' })
+    fireEvent.click(trigger)
+    expect(screen.getByRole('menu', { name: '思考级别' })).toBeTruthy()
+    fireEvent.keyDown(trigger, { key: 'Escape' })
+    expect(screen.queryByRole('menu')).toBeNull()
+  })
+
+  it('announces a rejected thinking selection on the transient toast', async () => {
+    const directory = createSnapshotStore<ModelDirectoryState>(state())
+    const select = vi.fn(async () => {
+      directory.set(state({ status: 'error', error: 'model-unavailable: thinking rejected' }))
+      return false
+    })
+    render(<ModelSelect
+      locked={false}
+      available
+      directory={directory}
+      load={vi.fn()}
+      select={select}
+      t={t}
+    />)
+
+    fireEvent.click(screen.getByRole('button', { name: '思考级别，当前 高' }))
+    fireEvent.click(screen.getByRole('menuitemradio', { name: '最高' }))
+    const toast = await screen.findByRole('alert')
+    expect(toast.textContent).toContain('模型操作失败：model-unavailable: thinking rejected')
   })
 })

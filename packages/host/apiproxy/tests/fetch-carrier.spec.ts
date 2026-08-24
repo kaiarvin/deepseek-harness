@@ -289,6 +289,14 @@ function fakeApi(overrides: Partial<{ muxFrames: MuxFrame[]; hostFrames: HostFra
     async respond(message: ClientResponse): Promise<RpcReceipt> {
       return message.rpcId === 'known' ? { accepted: true } : { accepted: false, reason: 'not-pending' }
     },
+    usage: {
+      async report(request) {
+        return {
+          rpcId: request.rpcId,
+          result: { ok: true, value: { timezoneOffsetMinutes: request.payload.timezoneOffsetMinutes ?? 0, days: [] } },
+        }
+      },
+    },
     downloads: {
       async sessionLog() {
         return new Response('stub', { status: 404 })
