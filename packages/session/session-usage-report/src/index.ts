@@ -161,7 +161,7 @@ export class SessionUsageReport extends Service {
     this.retentionDays = config.retentionDays ?? DEFAULT_RETENTION_DAYS
     this.persistDelayMs = config.persistDelayMs ?? DEFAULT_PERSIST_DELAY_MS
     ctx.on('session/event', (session: Session, event: SessionEvent) => {
-      void this._onEvent(session.id, event)
+      this._onEvent(session.id, event)
     })
     ctx.effect(() => () => {
       if (this.flushTimer !== undefined) {
@@ -187,7 +187,7 @@ export class SessionUsageReport extends Service {
     try {
       const loaded = await this._loadSamples()
       if (!loaded) {
-        this.query = this.ctx.get('sessionQuery') as SessionQueryEngine | undefined
+        this.query = this.ctx.get('sessionQuery')
         await this._backfill()
       }
       this._prune()

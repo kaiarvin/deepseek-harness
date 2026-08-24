@@ -15,6 +15,9 @@ import { deriveDecorations, scanTextRefs } from '../src/client/input/decorations
 
 const LEGACY_PLACEHOLDER = PLACEHOLDER
 
+/** One chip placeholder cell (the machine's U+FFFC run unit). */
+const P = PLACEHOLDER
+
 function claimOf(name: string, hint?: string): CommandClaim {
   return {
     token: `/${name} `,

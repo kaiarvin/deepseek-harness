@@ -53,7 +53,7 @@ describe('reference submission', () => {
       end: 4,
       draftRev: first.snapshot.draftRev,
     })).toBe(true)
-    expect(first.snapshot.draft).toBe('@Research notes ')
+    expect(first.snapshot.draft).toBe('￼￼ ')
     expect(mirror).toHaveBeenLastCalledWith(`${spacedMention} `)
 
     const sink = vi.fn(() => Promise.resolve<SubmitOutcome>({ kind: 'success' }))
@@ -91,8 +91,8 @@ describe('reference submission', () => {
     })
     chip(shell)
     expect(shell.snapshot).toMatchObject({
-      draft: '@Research ',
-      occurrences: [{ source: 'reference', ref: mention, label: 'Research', offset: 0, length: 9 }],
+      draft: '￼ ',
+      occurrences: [{ source: 'reference', ref: mention, label: 'Research', offset: 0, length: 1 }],
     })
 
     shell.submit('queue')
@@ -102,8 +102,8 @@ describe('reference submission', () => {
     })
     expect(sink).toHaveBeenNthCalledWith(1, mention, [], 'queue', expect.any(AbortSignal))
     expect(shell.snapshot).toMatchObject({
-      draft: '@Research ',
-      occurrences: [{ source: 'reference', ref: mention, label: 'Research', offset: 0, length: 9 }],
+      draft: '￼ ',
+      occurrences: [{ source: 'reference', ref: mention, label: 'Research', offset: 0, length: 1 }],
     })
     expect(shell.notices.getSnapshot()).toMatchObject({
       level: 'error',
@@ -137,7 +137,7 @@ describe('reference submission', () => {
       expect(shell.snapshot.phase).toBe('plain')
     })
     expect(sink).not.toHaveBeenCalled()
-    expect(shell.snapshot.draft).toBe('@Research ')
+    expect(shell.snapshot.draft).toBe('￼ ')
     expect(shell.snapshot.occurrences).toHaveLength(1)
     expect(shell.notices.getSnapshot()).toMatchObject({
       level: 'error',

@@ -662,7 +662,6 @@ export function InputBar({
             </span>
           </span>,
         )
-        cursor = chip.offset + chip.length
       } else {
         // Plain-range highlight: the glyphs stay the
         // textarea's (advance untouched); the mark paints the chip look.

@@ -38,7 +38,11 @@ The node half is an empty `apply` so the plugin appears in the host composition;
 
 ## Model Experience
 
-This package is purely a client presentation surface: it registers no tools, emits no session events, and adds no tokens or model-visible context. The model-facing `edit`/`write` tools and their result text are unchanged; only how their calls render in the conversation flow differs.
+None, as the expanded diff cards render already-logged tool results in the browser and register no prompt, message, schema, or tool.
+
+#### KV Cache effect
+
+None; this package neither assembles nor sends a provider request.
 
 ## Known Limitations and Deferred Work
 

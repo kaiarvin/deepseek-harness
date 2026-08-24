@@ -13,10 +13,6 @@ Cross-session token usage dialog for the Web GUI: a sidebar-foot icon beside Set
 
 The dialog fetches `usage.report` once on open with the browser's local timezone offset, so day boundaries match the viewer's wall clock. It owns its load/empty/error seats and renders nothing until the report arrives. Copy is localized (zh/en).
 
-## Model Experience
-
-None directly: the dialog is a read-only RPC consumer and adds no prompt, message, schema, tool, or model call.
-
 ## Composition
 
 ```yaml
@@ -25,3 +21,11 @@ None directly: the dialog is a read-only RPC consumer and adds no prompt, messag
 ```
 
 The host plugin provides `usage.report` (through the apiproxy gateway); without it the dialog answers an error seat.
+
+## Model Experience
+
+None, as the dialog is a read-only RPC consumer over the host's usage.report and adds no prompt, message, schema, tool, or model call.
+
+#### KV Cache effect
+
+None; this package neither assembles nor sends a provider request.
